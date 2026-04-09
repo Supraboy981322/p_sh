@@ -18,6 +18,21 @@ pub const Term = struct {
         aliases:?std.StringHashMap([]u8) = null,
     } = .{},
 
+
+    pub fn print_error(
+        self:*Term,
+        comptime msg:[]const u8,
+        stuff:anytype
+    ) void {
+        var stderr = @constCast(&self.stderr_file.writer(&.{})).interface;
+        stderr.print("\n" ++ msg ++ "\n\n", stuff) catch {
+            std.debug.panic("\n" ++ msg ++ "\n\n", stuff);
+        };
+        stderr.flush() catch {
+            std.debug.panic("\n" ++ msg ++ "\n\n", stuff);
+        };
+    }
+    
     pub fn init(
         alloc:std.mem.Allocator,
         stdin:*std.fs.File,
@@ -42,21 +57,21 @@ pub const Term = struct {
             .permanent_alloc = alloc,
         };
         try res.cd(@constCast("."));
-        try res.read_config();
+        res.read_config() catch |e| res.print_error("{t}", .{e});
         return res;
     }
 
     pub fn cd(self:*Term, path:[]u8) !void {
         const dir = self.cwd().realpathAlloc(self.alloc, path) catch |e| {
-            std.debug.print("{t}\n", .{e});
+            self.print_error("{t}", .{e});
             return;
         };
         defer self.alloc.free(dir);
         @constCast(&(std.fs.openDirAbsolute(dir, .{}) catch |e| {
-            std.debug.print("{t}\n", .{e});
+            self.print_error("{t}", .{e});
             return;
         })).setAsCwd() catch |e| {
-            std.debug.print("{t}\n", .{e});
+            self.print_error("{t}", .{e});
             return;
         };
     }
