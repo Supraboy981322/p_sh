@@ -12,6 +12,12 @@ pub const Term = struct {
     alloc:std.mem.Allocator,
     env:std.process.EnvMap,
 
+    permanent_alloc:std.mem.Allocator,
+
+    vars:struct {
+        aliases:?std.StringHashMap([]u8) = null,
+    } = .{},
+
     pub fn init(
         alloc:std.mem.Allocator,
         stdin:*std.fs.File,
@@ -33,8 +39,10 @@ pub const Term = struct {
             .stderr_file = stderr,
             .alloc = alloc,
             .env = if (env) |e| e else try std.process.getEnvMap(alloc),
+            .permanent_alloc = alloc,
         };
         try res.cd(@constCast("."));
+        try res.read_config();
         return res;
     }
 
@@ -60,6 +68,15 @@ pub const Term = struct {
 
     pub fn deinit(self:*Term) void {
         _ = self.env.deinit();
+        if (self.vars.aliases) |*const_aliases| {
+            var aliases = @constCast(const_aliases);
+            var itr = aliases.iterator();
+            while (itr.next()) |alias| {
+                self.permanent_alloc.free(alias.key_ptr.*);
+                self.permanent_alloc.free(alias.value_ptr.*);
+            }
+            aliases.deinit();
+        }
     }
 
     pub fn revert(self:*Term) !void {
