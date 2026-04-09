@@ -17,9 +17,23 @@ pub fn do(
     defer _ = arena.deinit();
     const alloc = arena.allocator();
 
-    const argv = try parser.split_args(cmd, term);
+    var argv = try parser.split_args(cmd, term);
     defer for (argv) |a| alloc.free(a);
     if (argv.len < 1) return .{ .code = 1, .quit = false };
+
+    if (term.vars.aliases) |*const_aliases| {
+        var aliases = @constCast(const_aliases);
+        var itr = aliases.iterator();
+        while (itr.next()) |alias| if (std.mem.eql(u8, alias.key_ptr.*, argv[0])) {
+            var arr = try std.ArrayList([]const u8).initCapacity(alloc, argv.len);
+            defer _ = arr.deinit(alloc);
+            const new = try parser.split_args(@constCast(alias.value_ptr.*), term);
+            try arr.appendSlice(alloc, new);
+            try arr.appendSlice(alloc, if (argv.len > 1) argv[1..] else &.{});
+            argv = try arr.toOwnedSlice(alloc);
+            break;
+        };
+    }
 
     const argv0 = std.meta.stringToEnum(Builtins, argv[0]) orelse {
         const code = system_command(argv, alloc, term) catch |e| {
