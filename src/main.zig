@@ -86,10 +86,15 @@ pub fn main() !void {
 
             //'ctrl'+'w'
             '\x17' => {
-                while (line.pop()) |b| switch (b) {
-                    ' ', '\t', '\n', '/', '\'', '"' => break,
-                    else => {},
-                };
+                var num_popped:usize = 0;
+                deep: while (line.pop()) |b| {
+                    defer num_popped += 1;
+                    for (globs.separators) |check| if (check == b and num_popped > 0) {
+                        try line.append(alloc, b);
+                        num_popped = 0;
+                        break :deep;
+                    };
+                }
             },
 
             // TODO: keyboard shortcuts
