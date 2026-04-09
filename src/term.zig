@@ -179,4 +179,98 @@ pub const Term = struct {
         }
         return res.toOwnedSlice(alloc);
     }
+
+    pub fn read_config(term:*Term) !void {
+        const Category = enum{ aliases };
+
+        const src = @embedFile("rc");
+        const alloc = term.permanent_alloc;
+
+        var value = try std.ArrayList(u8).initCapacity(alloc, 0);
+        defer value.deinit(alloc);
+        
+        var key = try std.ArrayList(u8).initCapacity(alloc, 0);
+        defer key.deinit(alloc);
+
+        var aliases = std.StringHashMap([]u8).init(alloc);
+
+        var string:u8 = 0;
+        var esc:bool = false;
+        var i:usize = 0;
+        var key_or_value:enum{ KEY, VALUE } = .KEY;
+        var category:?Category = null;
+
+        loop: while (i < src.len) : (i += 1) {
+            if (std.ascii.isWhitespace(src[i]) and string == 0 and !esc) {
+                if (value.items.len > 0) {
+                    try aliases.put(
+                        try key.toOwnedSlice(alloc),
+                        try value.toOwnedSlice(alloc)
+                    );
+                    key.clearAndFree(alloc);
+                    value.clearAndFree(alloc);
+                    key_or_value = .KEY;
+                }
+                continue :loop;
+            }
+
+            if (string != 0) {
+                switch (src[i]) {
+                    '\\' => {
+                        esc = true;
+                        continue :loop;
+                    },
+                    '"', '\'' => {
+                        if (string == src[i]) {
+                            string = 0;
+                            continue :loop;
+                        }
+                        if (key_or_value == .VALUE)
+                            try value.append(alloc, src[i])
+                        else
+                            try key.append(alloc, src[i]);
+                    },
+                    else => {
+                        if (key_or_value == .VALUE)
+                            try value.append(alloc, src[i])
+                        else
+                            try key.append(alloc, src[i]);
+                    },
+                }
+            } else if (!esc) switch (src[i]) {
+                '\\' => esc = true,
+                '"' => {
+                    if (string == src[i] or string == 0) {
+                        string = if (string == 0) src[i] else 0;
+                        continue :loop;
+                    }
+                    if (key_or_value == .VALUE)
+                        try value.append(alloc, src[i])
+                    else
+                        try key.append(alloc, src[i]);
+                },
+                '(' => {
+                    const key_name = try key.toOwnedSlice(alloc);
+                    category = std.meta.stringToEnum(Category, key_name) orelse {
+                        std.debug.panic("invalid category: {s}\n", .{key_name});
+                        unreachable;
+                    };
+                    alloc.free(key_name);
+                    value.clearAndFree(alloc);
+                    continue :loop;
+                },
+                '=' => {
+                    if (category) |_| key_or_value = .VALUE;
+                    continue :loop;
+                },
+                else => {
+                    if (key_or_value == .VALUE)
+                        try value.append(alloc, src[i])
+                    else
+                        try key.append(alloc, src[i]);
+                },
+            };
+        }
+        term.vars.aliases = aliases;
+    }
 };
