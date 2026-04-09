@@ -306,6 +306,12 @@ pub const Term = struct {
                     value.clearAndFree(alloc);
                     continue :loop;
                 },
+                ')' => {
+                    if (category == null) 
+                        std.debug.panic("unexpected closing brace", .{});
+                    category = null;
+                    continue :loop;
+                },
                 '=' => {
                     if (category) |_| key_or_value = .VALUE;
                     continue :loop;
