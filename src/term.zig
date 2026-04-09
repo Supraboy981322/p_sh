@@ -215,7 +215,23 @@ pub const Term = struct {
     pub fn read_config(term:*Term) !void {
         const Category = enum{ aliases };
 
-        const src = @embedFile("rc");
+        const home_dir = term.env.get("HOME") orelse return;
+        const config_path = b: {
+            var buf:[std.fs.max_path_bytes]u8 = undefined;
+            var wr = std.Io.Writer.fixed(&buf);
+            var formatter = std.fs.path.fmtJoin(&.{ home_dir, ".p_shrc"}); 
+            try formatter.format(&wr);
+            break :b buf[0..wr.end];
+        };
+
+        var config_file = term.cwd().openFile(config_path, .{}) catch |e| {
+            term.print_error("{t}", .{e});
+            return e;
+        };
+        var buf:[1024]u8 = undefined;
+        var reader = &@constCast(&config_file.reader(&buf)).interface;
+        defer config_file.close();
+
         const alloc = term.permanent_alloc;
 
         var value = try std.ArrayList(u8).initCapacity(alloc, 0);
@@ -228,12 +244,11 @@ pub const Term = struct {
 
         var string:u8 = 0;
         var esc:bool = false;
-        var i:usize = 0;
         var key_or_value:enum{ KEY, VALUE } = .KEY;
         var category:?Category = null;
 
-        loop: while (i < src.len) : (i += 1) {
-            if (std.ascii.isWhitespace(src[i]) and string == 0 and !esc) {
+        loop: while (reader.takeByte() catch null) |b| {
+            if (std.ascii.isWhitespace(b) and string == 0 and !esc) {
                 if (value.items.len > 0) {
                     try aliases.put(
                         try key.toOwnedSlice(alloc),
@@ -247,39 +262,39 @@ pub const Term = struct {
             }
 
             if (string != 0) {
-                switch (src[i]) {
+                switch (b) {
                     '\\' => {
                         esc = true;
                         continue :loop;
                     },
                     '"', '\'' => {
-                        if (string == src[i]) {
+                        if (string == b) {
                             string = 0;
                             continue :loop;
                         }
                         if (key_or_value == .VALUE)
-                            try value.append(alloc, src[i])
+                            try value.append(alloc, b)
                         else
-                            try key.append(alloc, src[i]);
+                            try key.append(alloc, b);
                     },
                     else => {
                         if (key_or_value == .VALUE)
-                            try value.append(alloc, src[i])
+                            try value.append(alloc, b)
                         else
-                            try key.append(alloc, src[i]);
+                            try key.append(alloc, b);
                     },
                 }
-            } else if (!esc) switch (src[i]) {
+            } else if (!esc) switch (b) {
                 '\\' => esc = true,
                 '"' => {
-                    if (string == src[i] or string == 0) {
-                        string = if (string == 0) src[i] else 0;
+                    if (string == b or string == 0) {
+                        string = if (string == 0) b else 0;
                         continue :loop;
                     }
                     if (key_or_value == .VALUE)
-                        try value.append(alloc, src[i])
+                        try value.append(alloc, b)
                     else
-                        try key.append(alloc, src[i]);
+                        try key.append(alloc, b);
                 },
                 '(' => {
                     const key_name = try key.toOwnedSlice(alloc);
@@ -297,9 +312,9 @@ pub const Term = struct {
                 },
                 else => {
                     if (key_or_value == .VALUE)
-                        try value.append(alloc, src[i])
+                        try value.append(alloc, b)
                     else
-                        try key.append(alloc, src[i]);
+                        try key.append(alloc, b);
                 },
             };
         }
