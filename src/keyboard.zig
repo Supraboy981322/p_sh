@@ -65,7 +65,7 @@ pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8
                         //'delete' key
                         if (peek(buf, &i) == '~') if (line.items.len > pos.*) {
                             _ = try hlp.pop_idx(term, alloc, u8, line, pos.*);
-                        } else { } else if (hlp.peek_or_todo(term.*, buf, i, ';', "in keyboard shortcuts")) {
+                        } else { } else if (hlp.peek_or_todo(term.*, buf[0..n], i, ';', "in keyboard shortcuts")) {
                             i += 1;
                             switch (peek(buf, &i)) {
                                 //'ctrl'+'del'
@@ -77,8 +77,8 @@ pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8
                                     }
                                 },
                                 else => term.TODO(
-                                    "handle keyboard shortcut: |{c}| ({x}) [{s}] {{{x}}}\n",
-                                    .{buf[i], buf[i], buf[0..n], buf[0..n]}
+                                    "handle keyboard shortcut: |{c}| ({x}) {{{x}}}\n",
+                                    .{buf[i], buf[i], buf[0..n]}
                                 ),
                             }
                         }

@@ -14,8 +14,8 @@ pub fn peek_or_todo(term:Term, buf:[]u8, i:usize, comptime done:?u8, comptime co
         return true
     else
         @constCast(&term).TODO(
-            "handle " ++ (if (done) |_| "|{c}| ({x}) " else "") ++ "[{s}] {{{x}}} " ++ context,
-            if (done) |_| .{ buf[i+1], buf[i+1], buf, buf } else .{ buf, buf }
+            "\n\thandle " ++ (if (done) |_| "|{c}| ({x}) " else "") ++ "{{{x}}} " ++ context,
+            if (done) |_| .{ buf[i+1], buf[i+1], buf } else .{ buf }
         );
     return false;
 }

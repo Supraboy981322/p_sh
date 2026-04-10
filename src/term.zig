@@ -41,7 +41,7 @@ pub const Term = struct {
         comptime msg:[]const u8,
         stuff:anytype,
     ) void {
-        self.print_error( "\nTODO: " ++ msg ++ "\n", stuff);
+        self.print_error( "TODO: " ++ msg ++ "\n", stuff);
     }
     
     pub fn init(
