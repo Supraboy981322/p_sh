@@ -69,14 +69,24 @@ pub const ExecResult = struct {
 
 pub fn do(
     cmd:[]u8,
-    term:*Term
-) !struct { code:u8, quit:bool = false } {
+    term:*Term,
+    opts:?ExecOpts,
+) !ExecResult {
     var arena = std.heap.ArenaAllocator.init(term.alloc);
     defer _ = arena.deinit();
     const alloc = arena.allocator();
 
-    var argv = try parser.split_args(cmd, term);
+    const argv_raw = std.mem.span(try parser.split_args(cmd, term));
+    defer for (argv_raw) |arg| if (arg) |a| alloc.free(std.mem.span(a));
+    var argv = b: {
+        var arr = try std.ArrayList([]const u8).initCapacity(alloc, argv_raw.len);
+        defer _ = arr.deinit(alloc);
+        for (argv_raw) |arg| if (arg) |a|
+            try arr.append(alloc, std.mem.span(a));
+        break :b try arr.toOwnedSlice(alloc);
+    };
     defer for (argv) |a| alloc.free(a);
+
     if (argv.len < 1) return .{ .code = 1, .quit = false };
 
     if (term.vars.aliases) |*const_aliases| {
@@ -85,24 +95,19 @@ pub fn do(
         while (itr.next()) |alias| if (std.mem.eql(u8, alias.key_ptr.*, argv[0])) {
             var arr = try std.ArrayList([]const u8).initCapacity(alloc, argv.len);
             defer _ = arr.deinit(alloc);
-            const new = try parser.split_args(@constCast(alias.value_ptr.*), term);
-            try arr.appendSlice(alloc, new);
-            try arr.appendSlice(alloc, if (argv.len > 1) argv[1..] else &.{});
+            const new = std.mem.span(try parser.split_args(@constCast(alias.value_ptr.*), term));
+            for (new) |arg| if (arg) |a|
+                try arr.append(alloc, std.mem.span(a));
             argv = try arr.toOwnedSlice(alloc);
             break;
         };
     }
 
     const argv0 = std.meta.stringToEnum(Builtins, argv[0]) orelse {
-        const code = system_command(argv, alloc, term) catch |e| {
+        const code = system_command(argv, alloc, term, opts) catch |e| {
             switch (e) {
 
-                error.FileNotFound => {
-                    for ([_][]const u8{
-                        "command not found: ", argv[0], "\n"
-                    }) |thing|
-                        _ = try term.stderr_file.write(thing);
-                },
+                error.FileNotFound => term.print_error("command not found: {s}", .{argv[0]}),
 
                 else => _ = try term.stderr_file.write(@errorName(e)),
             }
@@ -115,7 +120,7 @@ pub fn do(
         .exit, => return .{ .code = 0, .quit = true },
         .cd => {
             if (argv.len < 2) {
-                _ = try term.stderr_file.write("not enough args; need a directory");
+                term.print_error("not enough args; need a directory", .{});
                 return .{ .code = 2 };
             }
             try term.cd(@constCast(argv[1]));
@@ -124,16 +129,46 @@ pub fn do(
     return .{ .code = 0 };
 }
 
-pub fn system_command(argv:[]const []const u8, alloc:std.mem.Allocator, term:*Term) !u8 {
+pub fn system_command(
+    argv:[]const
+    []const u8,
+    alloc:std.mem.Allocator,
+    term:*Term,
+    opts:?ExecOpts,
+) !u8 {
+
     var child = std.process.Child{
         .allocator = alloc,
         .argv = argv,
+
         .stdout_behavior = .Inherit,
-        .stderr_behavior = .Inherit,
         .stdin_behavior = .Inherit,
-        .stdin = term.stdin_file.*,
-        .stdout = term.stdout_file.*,
-        .stderr = term.stderr_file.*,
+        .stderr_behavior = .Inherit,
+
+        .stdin =
+            if (opts) |o|
+                if (o.stdin.file) |file|
+                    file.*
+                else
+                    null
+            else
+                term.stdin_file.*,
+        .stdout =
+            if (opts) |o|
+                if (o.stdout.file) |file|
+                    file.*
+                else
+                    null
+            else
+                term.stdout_file.*,
+        .stderr =
+            if (opts) |o|
+                if (o.stderr.file) |file|
+                    file.*
+                else
+                    null
+            else
+                term.stderr_file.*,
 
         // TODO: this stuff
         .id = undefined,

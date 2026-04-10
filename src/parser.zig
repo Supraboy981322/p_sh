@@ -2,9 +2,9 @@ const std = @import("std");
 
 const Term = @import("term.zig").Term;
 
-pub fn split_args(in:[]u8, term:*Term) ![]const []const u8 {
+pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
     const alloc = term.alloc;
-    var res = try std.ArrayList([]const u8).initCapacity(alloc, 0);
+    var res = try std.ArrayList(?[*:0]const u8).initCapacity(alloc, 0);
     var mem = try std.ArrayList(u8).initCapacity(alloc, 0);
     var mem2 = try std.ArrayList(u8).initCapacity(alloc, 0);
     defer {
@@ -49,7 +49,9 @@ pub fn split_args(in:[]u8, term:*Term) ![]const []const u8 {
             },
 
             ' ', '\n', '\r', '\t' => if (str_type == 0) if (mem.items.len > 0) {
-                try res.append(alloc, try mem.toOwnedSlice(alloc));
+                try mem.append(alloc, 0);
+                const slice = try mem.toOwnedSlice(alloc);
+                try res.append(alloc, slice[0 .. slice.len - 1 :0].ptr);
                 mem.clearAndFree(alloc);
             } else {} else
                 try mem.append(alloc, b),
@@ -57,9 +59,13 @@ pub fn split_args(in:[]u8, term:*Term) ![]const []const u8 {
             else => { try mem.append(alloc, b); },
         }
     }
-    if (mem.items.len > 0)
-        try res.append(alloc, try mem.toOwnedSlice(alloc));
-    return try res.toOwnedSlice(alloc);
+    if (mem.items.len > 0) {
+        try mem.append(alloc, 0);
+        const slice = try mem.toOwnedSlice(alloc);
+        try res.append(alloc, slice[0 .. slice.len - 1 :0].ptr);
+    }
+    try res.append(alloc, null);
+    return @ptrCast((try res.toOwnedSlice(alloc)).ptr);
 }
 
 pub fn seek_var_name(alloc:std.mem.Allocator, in:[]u8, i:*usize) ![]u8 {
