@@ -1,6 +1,7 @@
 const std = @import("std");
 const exec = @import("exec.zig");
 const globs = @import("globs.zig");
+const hlp = @import("helpers.zig");
 
 const stdout = globs.stdout;
 const stderr = globs.stderr;
@@ -99,14 +100,14 @@ pub fn main() !void {
 
             // TODO: keyboard shortcuts
             '\x1b' => {
-                if (buf[i + 1] != '[') {
-                    pos += 1;
-                    if (pos >= line.items.len)
-                        try line.append(alloc, buf[i])
-                    else
-                        line.items[pos] = buf[i];
-                    continue :inner;
-                }
+                //if (buf[i + 1] != '[') {
+                //    pos += 1;
+                //    if (pos >= line.items.len)
+                //        try line.append(alloc, buf[i])
+                //    else
+                //        line.items[pos] = buf[i];
+                //    continue :inner;
+                //}
                 i += 2;
                 while (i < n) : (i += 1) {
                     switch (buf[i]) {
@@ -127,6 +128,38 @@ pub fn main() !void {
                         'H' => { pos = 0; },
                         //end
                         'F' => { pos = line.items.len; },
+                        
+                        '3' => {
+                            //'delete' key
+                            if (peek(&buf, &i) == '~') if (line.items.len > pos+1) {
+                                const before = try term.alloc.dupe(u8, line.items[0..pos+1]);
+                                const after = try term.alloc.dupe(u8, line.items[pos+1..]);
+                                line.clearAndFree(alloc);
+                                try line.appendSlice(alloc, before);
+                                _ = line.pop();
+                                try line.appendSlice(alloc, after);
+                            } else { _ = line.pop(); } else if (hlp.peek_or_todo(term, &buf, i, ';', "in keyboard shortcuts")) {
+                                i += 1;
+                                switch (peek(&buf, &i)) {
+                                    //'ctrl'+'del'
+                                    '5' => {
+                                        var b:u8 = 0;
+                                        while (!hlp.contains(&globs.separators, b) and b != 1 and line.items.len > pos) {
+                                            const before = try term.alloc.dupe(u8, line.items[0..pos+1]);
+                                            const after = try term.alloc.dupe(u8, line.items[pos+1..]);
+                                            line.clearAndFree(alloc);
+                                            try line.appendSlice(alloc, before);
+                                            b = if (line.pop()) |popped| popped else 1;
+                                            try line.appendSlice(alloc, after);
+                                        }
+                                    },
+                                    else => term.TODO(
+                                        "handle keyboard shortcut: |{c}| ({x}) [{s}] {{{x}}}\n",
+                                        .{buf[i], buf[i], buf[0..n], buf[0..n]}
+                                    ),
+                                }
+                            }
+                        },
 
                         //ignore everything else
                         else => {
