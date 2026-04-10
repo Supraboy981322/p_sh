@@ -109,6 +109,23 @@ pub const Term = struct {
         );
     }
 
+    pub fn is_in_path(self:*Term, name:[]u8) !bool {
+        if (std.fs.path.isAbsolute(name)) return true;
+        const path = self.env.get("PATH") orelse "/bin:/usr/bin";
+        var itr = std.mem.tokenizeScalar(u8, path, ':');
+        loop: while (itr.next()) |dir| {
+            const joined = try std.fs.path.join(self.alloc, &.{ dir, name }); 
+            defer self.alloc.free(joined);
+            var buf:[std.fs.max_path_bytes]u8 = undefined;
+            _ = std.fs.realpath(joined, &buf) catch |e| switch (e) {
+                error.FileNotFound => continue :loop,
+                else => return false,
+            };
+            return true;
+        }
+        return false;
+    }
+
     pub fn colorize(self:*Term, in:[]u8) ![]u8 {
         const alloc = self.alloc;
         var res = try std.ArrayList(u8).initCapacity(alloc, 0);
