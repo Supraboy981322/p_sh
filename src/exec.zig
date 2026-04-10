@@ -82,137 +82,6 @@ pub const ExecResult = struct {
     err:?anyerror = null
 };
 
-pub fn do(
-    cmd:[]u8,
-    term:*Term,
-    opts:?ExecOpts,
-) !ExecResult {
-    var arena = std.heap.ArenaAllocator.init(term.alloc);
-    defer _ = arena.deinit();
-    const alloc = arena.allocator();
-
-    const argv_raw = std.mem.span(try parser.split_args(cmd, term));
-    defer for (argv_raw) |arg| if (arg) |a| alloc.free(std.mem.span(a));
-    var argv = b: {
-        var arr = try std.ArrayList([]const u8).initCapacity(alloc, argv_raw.len);
-        defer _ = arr.deinit(alloc);
-        for (argv_raw) |arg| if (arg) |a|
-            try arr.append(alloc, std.mem.span(a));
-        break :b try arr.toOwnedSlice(alloc);
-    };
-    defer for (argv) |a| alloc.free(a);
-
-    if (argv.len < 1) return .{ .code = 1, .quit = false };
-
-    if (term.vars.aliases) |*const_aliases| {
-        var aliases = @constCast(const_aliases);
-        var itr = aliases.iterator();
-        while (itr.next()) |alias| if (std.mem.eql(u8, alias.key_ptr.*, argv[0])) {
-            var arr = try std.ArrayList([]const u8).initCapacity(alloc, argv.len);
-            defer _ = arr.deinit(alloc);
-            const new = std.mem.span(try parser.split_args(@constCast(alias.value_ptr.*), term));
-            for (new) |arg| if (arg) |a|
-                try arr.append(alloc, std.mem.span(a));
-            argv = try arr.toOwnedSlice(alloc);
-            break;
-        };
-    }
-
-    const argv0 = std.meta.stringToEnum(Builtins, argv[0]) orelse {
-        const code = system_command(argv, alloc, term, opts) catch |e| {
-            switch (e) {
-
-                error.FileNotFound => term.print_error("command not found: {s}", .{argv[0]}),
-
-                else => _ = try term.stderr_file.write(@errorName(e)),
-            }
-            return e;
-        };
-        return .{ .code = code, .quit = false };
-    };
-
-    switch (argv0) {
-        .exit, => return .{ .code = 0, .quit = true },
-        .cd => {
-            if (argv.len < 2) {
-                term.print_error("not enough args; need a directory", .{});
-                return .{ .code = 2 };
-            }
-            try term.cd(@constCast(argv[1]));
-        }
-    }
-    return .{ .code = 0 };
-}
-
-pub fn system_command(
-    argv:[]const
-    []const u8,
-    alloc:std.mem.Allocator,
-    term:*Term,
-    opts:?ExecOpts,
-) !u8 {
-
-    var child = std.process.Child{
-        .allocator = alloc,
-        .argv = argv,
-
-        .stdout_behavior = .Inherit,
-        .stdin_behavior = .Inherit,
-        .stderr_behavior = .Inherit,
-
-        .stdin =
-            if (opts) |o|
-                if (o.stdin.file) |file|
-                    file.*
-                else
-                    null
-            else
-                term.stdin_file.*,
-        .stdout =
-            if (opts) |o|
-                if (o.stdout.file) |file|
-                    file.*
-                else
-                    null
-            else
-                term.stdout_file.*,
-        .stderr =
-            if (opts) |o|
-                if (o.stderr.file) |file|
-                    file.*
-                else
-                    null
-            else
-                term.stderr_file.*,
-
-        // TODO: this stuff
-        .id = undefined,
-        .thread_handle = undefined,
-        .err_pipe = null,
-        .term = null,
-        .env_map = @constCast(&term.env),
-        .uid = null,
-        .cwd = null,
-        .cwd_dir = term.cwd(),
-        .gid = null,
-        .pgid = null,
-        .expand_arg0 = .no_expand,
-    };
-
-    if (opts) |o| {
-        if (o.stdout.is_pipe)
-            child.stdout_behavior = .Pipe;
-        if (o.stderr.is_pipe)
-            child.stderr_behavior = .Pipe;
-        if (o.stdin.is_pipe)
-            child.stdin_behavior = .Pipe;
-    }
-
-    try child.spawn(); 
-    _ = try child.wait();
-    return 0;
-}
-
 pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
     var i:usize = 0;
     for (res.items) |*cmd| {
@@ -259,12 +128,12 @@ pub fn parse_and_run(
         // TODO: should I just move this out of the loop, will it ever change between spawning processes?
         cmd.envp = try std.process.createEnvironFromMap(alloc, &term.env, .{});
 
-        const name = cmd.split[0] orelse {
+        _ = cmd.split[0] orelse {
             final.code = 2;
             return final.*;
         };
 
-        const matched_builtin = std.meta.stringToEnum(Builtins, std.mem.span(name)) orelse {
+        const matched_builtin = std.meta.stringToEnum(Builtins, std.mem.span(cmd.split[0].?)) orelse {
             cmd.pid = try std.posix.fork();
             if (cmd.pid == 0) {
 
