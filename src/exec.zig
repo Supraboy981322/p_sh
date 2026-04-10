@@ -43,31 +43,25 @@ pub const Cmd = struct {
         std.debug.print(
             \\Cmd = .{{
             \\  .raw = {s},
+            \\  .split = [C-style null-terminated array of pointers to 0 terminated c strings],
+            \\  .fd_set = .{{ {d} {d} }},
+            \\  .is_builtin = {},
+            \\  .envp = [very large C-style null-terminated array of pointers to 0 terminated c strings],
             \\  .opts = .{{
             \\     .wait = {},
-            \\     .stdout = .{{
-            \\        .file = {?d},
-            \\        .is_file = {},
-            \\        .is_pipe = {},
-            \\      }},
-            \\     .stdin = .{{
-            \\        .file = {?d},
-            \\        .is_file = {},
-            \\        .is_pipe = {},
-            \\      }},
-            \\     .stderr = .{{
-            \\        .file = {?d},
-            \\        .is_file = {},
-            \\        .is_pipe = {},
+            \\     .pipe_details = {{
+            \\          .out = {},
+            \\          .in = {},
             \\      }},
             \\   }},
             \\}};
             ++ "\n", .{
                 self.raw,
+                self.fd_set[0], self.fd_set[1],
+                self.is_builtin,
                 self.opts.wait,
-                if (self.opts.stdout.file) |file| file.handle else null,  self.opts.stdout.is_file, self.opts.stdout.is_pipe,
-                if (self.opts.stdin.file)  |file| file.handle else null,  self.opts.stdin.is_file,  self.opts.stdin.is_pipe,
-                if (self.opts.stderr.file) |file| file.handle else null,  self.opts.stderr.is_file, self.opts.stderr.is_pipe,
+                self.opts.pipe_details.out,
+                self.opts.pipe_details.in,
             }
         );
     }
