@@ -63,6 +63,7 @@ pub fn main() !void {
                 pos + 1,
             }
         );
+        exit_code = 0;
         try stdout.flush();
         term.alloc.free(colorized.line);
 
