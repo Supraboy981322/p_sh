@@ -32,8 +32,15 @@ pub const Cmd = struct {
     fd_set:[2]std.posix.fd_t,
     pid:std.posix.pid_t = undefined,
     opts:ExecOpts = .{ .wait = true },
-    envp:[*:null]const ?[*:0]const u8 = undefined,
+    envp:[*:null]const ?[*:0]const u8 = undefined, // TODO: determine if I should free this
     is_builtin:bool = false,
+    
+    pub fn free(self:*Cmd, alloc:std.mem.Allocator) void {
+        alloc.free(self.raw);
+        for (std.mem.span(self.split)) |arg|
+            if (arg) |a|
+                alloc.free(std.mem.span(a));
+    }
 
     pub fn print(self:*Cmd) void {
         std.debug.print(
