@@ -147,7 +147,6 @@ pub const Term = struct {
             const b = in[@intCast(i)];
             if (hlp.contains(&globs.separators, b) and name_end == 0)
                 name_end = @intCast(i);
-            
 
             var j:usize = @intCast(i);
             var next:usize = @intCast(i+1);
@@ -220,7 +219,13 @@ pub const Term = struct {
                 else => {},
             }
 
-            try res.appendSlice(alloc, "\x1b[00m");
+            try res.appendSlice(
+                alloc,
+                if (hlp.contains(@constCast(&globs.cmd_separators), b))
+                    "\x1b[36m"
+                else
+                    "\x1b[00m"
+            );
 
             if (string != 0)
                 try res.appendSlice(alloc, "\x1b[33m");
