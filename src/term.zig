@@ -213,18 +213,7 @@ pub const Term = struct {
                     } else 1;
                 },
                 ' ' => {
-                    if (name_end == 0) {
-                        name_end = @intCast(i);
-                        const valid = try self.is_in_path(in[0..name_end]);
-                        if (!valid) inner: for (res.items, 0..) |*c, k| {
-                            if (c.* == '\x1b') {
-                                res.items[k+2] = '3';
-                                res.items[k+3] = '1';
-                            } else
-                                if (c.* ==  ' ')
-                                    break :inner;
-                        };
-                    }
+                    if (name_end == 0) name_end = @intCast(i);
                 },
                 else => {},
             }
@@ -242,6 +231,18 @@ pub const Term = struct {
             try res.append(alloc, b);
             try res.appendSlice(alloc, "\x1b[0m");
         }
+
+        const name = in[0 .. if (name_end > 0) name_end else in.len ];
+        const valid = try self.is_in_path(name);
+        if (!valid) loop: for (res.items, 0..) |*c, k| {
+            if (c.* == '\x1b') {
+                res.items[k+2] = '3';
+                res.items[k+3] = '1';
+            } else
+                if (c.* ==  ' ')
+                    break :loop;
+        };
+
         return res.toOwnedSlice(alloc);
     }
 
