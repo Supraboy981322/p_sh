@@ -3,6 +3,7 @@ const globs = @import("globs.zig");
 const parser = @import("parser.zig");
 
 const Term = @import("term.zig").Term;
+const peek = parser.peek_no_state;
 
 const Builtins = enum {
     exit,
@@ -183,8 +184,122 @@ pub fn system_command(
         .pgid = null,
         .expand_arg0 = .no_expand,
     };
+
+    if (opts) |o| {
+        if (o.stdout.is_pipe)
+            child.stdout_behavior = .Pipe;
+        if (o.stderr.is_pipe)
+            child.stderr_behavior = .Pipe;
+        if (o.stdin.is_pipe)
+            child.stdin_behavior = .Pipe;
+    }
+
     try child.spawn(); 
-    // TODO: term code
     _ = try child.wait();
     return 0;
+}
+
+pub fn parse_and_run(
+    line:[]u8,
+    term:*Term
+) !ExecResult {
+    const alloc = term.alloc;
+    var mem = try std.ArrayList(u8).initCapacity(alloc, 0);
+    defer _ = mem.deinit(alloc);
+
+    var res = try std.ArrayList(Cmd).initCapacity(alloc, 0);
+    defer _ = res.deinit(alloc);
+
+    var i:usize = 0;
+    loop: while (i < line.len) : (i += 1) {
+        const b = line[i];
+        if (!std.ascii.isWhitespace(b)) for (globs.cmd_separators) |separator| if (b == separator) {
+            try res.append(alloc, .{
+                .raw = try mem.toOwnedSlice(alloc),
+                .opts = .{
+                    .stdout = .{ .file = term.stdout_file },
+                    .stderr = .{ .file = term.stderr_file },
+                    .stdin =  .{ .file = term.stdin_file  },
+                    .wait = true,
+                    .pipe_details = switch (separator) {
+                        ';' => null,
+                        '|' => .{
+                            .out = true,
+                        },
+                        else => std.debug.panic("TODO: cmd separator |{c}|", .{separator}), 
+                    }
+                },
+            });
+            continue :loop;
+        };
+        try mem.append(alloc, b);
+    }
+    if (mem.items.len > 0) {
+        try res.append(alloc, .{
+            .raw = try mem.toOwnedSlice(alloc),
+            .opts = .{
+                .stdin = .{ .file = term.stdin_file, },
+                .stdout = .{ .file = term.stdout_file, },
+                .stderr = .{ .file = term.stderr_file },
+                .wait = true,
+            },
+        });
+    }
+
+    var final:ExecResult = .{
+        .quit = false,
+        .code = 0,
+    };
+    _ = &final;
+    i = 0;
+    loop: while (i < res.items.len) : (i += 1) {
+        const cmd = res.items[i];
+        if (cmd.opts.pipe_details) |pipe| {
+            if (pipe.out) if (res.items.len > i+1) {
+                defer i += 1;
+
+                const cmd_1_split = try parser.split_args(cmd.raw, term);
+                if (std.mem.span(cmd_1_split).len < 1) continue :loop;
+                const fd_set = try std.posix.pipe();
+                const envp: [*:null]const ?[*:0]const u8 = try std.process.createEnvironFromMap(alloc, &term.env, .{});
+
+                const cmd_next = res.items[i+1]; 
+                const cmd_2_split = try parser.split_args(cmd_next.raw, term);
+
+                const pid_1 = try std.posix.fork();
+                if (pid_1 == 0) {
+                    std.posix.close(fd_set[0]);
+                    _ = try std.posix.dup2(fd_set[1], std.posix.STDOUT_FILENO);
+                    std.posix.close(fd_set[1]);
+                    const err = std.posix.execvpeZ(cmd_1_split[0].?, cmd_1_split, envp);
+
+                    term.print_error("failed to run command: {?s} ({})", .{cmd_1_split[0], err});
+                    std.posix.exit(1);
+                }
+
+                const  pid_2 = try std.posix.fork();
+                if (pid_2 == 0) {
+                    std.posix.close(fd_set[1]);
+                    _ = try std.posix.dup2(fd_set[0], std.posix.STDIN_FILENO);
+                    std.posix.close(fd_set[0]);
+                    const err = std.posix.execvpeZ(cmd_2_split[0].?, cmd_2_split, envp);
+
+                    term.print_error("failed to run command: {?s} ({})", .{cmd_2_split[0], err});
+                    std.posix.exit(1);
+                }
+
+                for (fd_set) |fd| std.posix.close(fd);
+                _ = std.posix.waitpid(pid_1, 0);
+                _ = std.posix.waitpid(pid_2, 0);
+            } else {
+                term.print_error("invalid pipe: missing right-hand side", .{}); 
+                return .{ .code = 1, .quit = true }; // TODO: correct exit code 
+            };
+        } else {
+            final = try do(cmd.raw, term , cmd.opts);
+        }
+        if (final.quit or final.code != 0) break;
+    }
+
+    return final;
 }

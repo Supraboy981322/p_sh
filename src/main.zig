@@ -153,11 +153,9 @@ pub fn main() !void {
                 _ = try stdout.write("\r\n");
                 try stdout.flush();
                 exit_code = b: {
-                    const info = exec.do(line.items, &term) catch |e| {
-                        break :b switch (e) {
-                            error.FileNotFound => 127,
-                            else => 126,
-                        };
+                    const info = exec.parse_and_run(line.items, &term) catch |e| {
+                        std.debug.print("\n\n{t}\n", .{e});
+                        break :b 127;
                     };
                     quit = info.quit;
                     break :b info.code;
