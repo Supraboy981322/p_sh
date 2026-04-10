@@ -1,3 +1,4 @@
+const std = @import("std");
 const Term = @import("term.zig").Term;
 
 pub fn contains(list:[]u8, thing:u8) bool {
@@ -17,4 +18,15 @@ pub fn peek_or_todo(term:Term, buf:[]u8, i:usize, comptime done:?u8, comptime co
             if (done) |_| .{ buf[i+1], buf[i+1], buf, buf } else .{ buf, buf }
         );
     return false;
+}
+
+pub fn pop_idx(term:*Term, alloc:std.mem.Allocator, comptime T:type, list:*std.ArrayList(T), pos:usize) !?T {
+    if (list.items.len <= pos) return null;
+    const before = try term.alloc.dupe(u8, list.items[0..pos+1]);
+    const after = try term.alloc.dupe(u8, list.items[pos+1..]);
+    list.clearAndFree(alloc);
+    try list.appendSlice(alloc, before);
+    const thing = list.pop();
+    try list.appendSlice(alloc, after);
+    return thing;
 }
