@@ -51,20 +51,20 @@ pub fn main() !void {
         defer _ = arena.deinit();
         term.alloc = arena.allocator();
 
-        const ps1_char:u8 = if (exit_code == 0) '?' else '!';
-        const colorized_line =  try term.colorize(line.items);
+        const colorized =  try term.colorize(line.items);
+        const ps1_char:u8 = if (exit_code == 0 and colorized.cmd_ok) '?' else '!';
         try stdout.print(
             "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{s}\x1b[3;36m](\x1b[3{d}m{c}\x1b[36m):\x1b[0m\x1b[s {s}\x1b[u\x1b[{d}C",
             .{
                 try term.cwd().realpathAlloc(term.alloc, "."),
                 @as(u8, if (ps1_char == '?') 2 else 1),
                 ps1_char,
-                colorized_line,
+                colorized.line,
                 pos + 1,
             }
         );
         try stdout.flush();
-        term.alloc.free(colorized_line);
+        term.alloc.free(colorized.line);
 
         stdout.flush() catch {};
         stderr.flush() catch {};
@@ -75,14 +75,14 @@ pub fn main() !void {
         //for (buf[0..n]) |k| std.debug.print("{d} ({x}) |{c}|\n", .{k, k, k});
         const stuff = try keyboard.do(alloc, &term, &line, &buf, n, &pos);
         if (stuff.run) {
+            try term.revert();
+            var quit:bool = false;
             defer {
                 pos = 0;
+                line.clearAndFree(alloc);
+                term.mk_raw() catch |e| @panic(@errorName(e));
+                _ = stdout.write("\r\n") catch {};
             }
-            defer line.clearAndFree(alloc);
-            var quit:bool = false;
-            try term.revert();
-            defer term.mk_raw() catch |e| @panic(@errorName(e));
-            defer _ = stdout.write("\r\n") catch {};
             _ = try stdout.write("\r\n");
             try stdout.flush();
             exit_code = b: {

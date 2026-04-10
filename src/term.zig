@@ -138,7 +138,7 @@ pub const Term = struct {
         return false;
     }
 
-    pub fn colorize(self:*Term, in:[]u8) ![]u8 {
+    pub fn colorize(self:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
         const alloc = self.alloc;
         var res = try std.ArrayList(u8).initCapacity(alloc, 0);
         defer _ = res.deinit(alloc);
@@ -259,7 +259,10 @@ pub const Term = struct {
                     break :loop;
         };
 
-        return res.toOwnedSlice(alloc);
+        return .{
+            .line = try res.toOwnedSlice(alloc),
+            .cmd_ok = valid,
+        };
     }
 
     pub fn read_config(term:*Term) !void {
