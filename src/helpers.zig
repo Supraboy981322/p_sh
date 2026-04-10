@@ -30,3 +30,22 @@ pub fn pop_idx(term:*Term, alloc:std.mem.Allocator, comptime T:type, list:*std.A
     try list.appendSlice(alloc, after);
     return thing;
 }
+
+pub fn determine_exit_code(e:anyerror) u8 {
+    return switch (e) {
+        error.NotEnoughArgs,
+            => 2,
+
+        error.CommandNotFound,
+            => 127,
+
+        error.AccessDenied,
+        error.PermissionDenied,
+            => 126,
+
+        error.FileNotFound,
+            => 1, // TODO: probably a better code for this one
+
+        else => 1,
+    };
+}
