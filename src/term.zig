@@ -36,6 +36,14 @@ pub const Term = struct {
         };
     }
     
+    pub fn TODO(
+        self:*Term,
+        comptime msg:[]const u8,
+        stuff:anytype,
+    ) void {
+        self.print_error( "\nTODO: " ++ msg ++ "\n", stuff);
+    }
+    
     pub fn init(
         alloc:std.mem.Allocator,
         stdin:*std.fs.File,
