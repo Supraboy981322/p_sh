@@ -1,6 +1,8 @@
 const std = @import("std");
 const parser = @import("parser.zig");
 const exec = @import("exec.zig");
+const globs = @import("globs.zig");
+const hlp = @import("helpers.zig");
 
 pub const Term = struct {
     og:std.os.linux.termios,
@@ -143,6 +145,9 @@ pub const Term = struct {
 
         while (i < in.len) : (i += 1) {
             const b = in[@intCast(i)];
+            if (hlp.contains(&globs.separators, b) and name_end == 0)
+                name_end = @intCast(i);
+            
 
             var j:usize = @intCast(i);
             var next:usize = @intCast(i+1);
@@ -212,9 +217,6 @@ pub const Term = struct {
                         else => 1,
                     } else 1;
                 },
-                ' ' => {
-                    if (name_end == 0) name_end = @intCast(i);
-                },
                 else => {},
             }
 
@@ -239,7 +241,7 @@ pub const Term = struct {
                 res.items[k+2] = '3';
                 res.items[k+3] = '1';
             } else
-                if (std.ascii.isWhitespace(c.*))
+                if (hlp.contains(&globs.separators, c.*))
                     break :loop;
         };
 
