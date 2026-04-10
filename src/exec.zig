@@ -1,14 +1,12 @@
 const std = @import("std");
 const globs = @import("globs.zig");
 const parser = @import("parser.zig");
+const builtins = @import("builtins.zig");
 
 const Term = @import("term.zig").Term;
 const peek = parser.peek_no_state;
 
-pub const Builtins = enum {
-    exit,
-    cd,
-};
+pub const Builtins = builtins.Valid;
 
 const IoOpt = struct {
     file:?*std.fs.File = null,
@@ -21,14 +19,21 @@ const ExecOpts = struct {
     stderr:IoOpt = .{},
     stdin:IoOpt = .{},
     wait:bool,
-    pipe_details:?struct {
+    pipe_details:struct {
         out:bool = false,
-    } = null,
+        in:bool = false,
+    } = .{},
 };
 
 pub const Cmd = struct {
     raw:[]u8,
+    split:[*:null]const ?[*:0]const u8 = undefined,
+    fd_set:[2]std.posix.fd_t,
+    pid:std.posix.pid_t = undefined,
     opts:ExecOpts = .{ .wait = true },
+    envp:[*:null]const ?[*:0]const u8 = undefined,
+    is_builtin:bool = false,
+
     pub fn print(self:*Cmd) void {
         std.debug.print(
             \\Cmd = .{{
@@ -65,7 +70,8 @@ pub const Cmd = struct {
 
 pub const ExecResult = struct {
     code:u8,
-    quit:bool = false
+    quit:bool = false,
+    err:?anyerror = null
 };
 
 pub fn do(
@@ -217,13 +223,17 @@ pub fn parse_and_run(
         if (!std.ascii.isWhitespace(b) and string == 0) for (globs.cmd_separators) |separator| if (b == separator) {
             try res.append(alloc, .{
                 .raw = try mem.toOwnedSlice(alloc),
+                .fd_set = .{
+                    term.stdin_file.handle,
+                    term.stdout_file.handle,
+                },
                 .opts = .{
                     .stdout = .{ .file = term.stdout_file },
                     .stderr = .{ .file = term.stderr_file },
                     .stdin =  .{ .file = term.stdin_file  },
                     .wait = true,
                     .pipe_details = switch (separator) {
-                        ';' => null,
+                        ';' => .{},
                         '|' => .{
                             .out = true,
                         },
@@ -244,6 +254,10 @@ pub fn parse_and_run(
     if (mem.items.len > 0) {
         try res.append(alloc, .{
             .raw = try mem.toOwnedSlice(alloc),
+            .fd_set = .{
+                term.stdin_file.handle,
+                term.stdout_file.handle
+            },
             .opts = .{
                 .stdin = .{ .file = term.stdin_file, },
                 .stdout = .{ .file = term.stdout_file, },
@@ -253,60 +267,74 @@ pub fn parse_and_run(
         });
     }
 
-    var final:ExecResult = .{
+    var final:*ExecResult = @constCast(&ExecResult{
         .quit = false,
         .code = 0,
-    };
+        .err = null,
+    });
     _ = &final;
+
     i = 0;
-    loop: while (i < res.items.len) : (i += 1) {
-        const cmd = res.items[i];
-        if (cmd.opts.pipe_details) |pipe| {
-            if (pipe.out) if (res.items.len > i+1) {
-                defer i += 1;
+    for (res.items) |*cmd| {
+        defer i += 1;
+        cmd.split = try parser.split_args(cmd.raw, term);
 
-                const cmd_1_split = try parser.split_args(cmd.raw, term);
-                if (std.mem.span(cmd_1_split).len < 1) continue :loop;
-                const fd_set = try std.posix.pipe();
-                const envp: [*:null]const ?[*:0]const u8 = try std.process.createEnvironFromMap(alloc, &term.env, .{});
-
-                const cmd_next = res.items[i+1]; 
-                const cmd_2_split = try parser.split_args(cmd_next.raw, term);
-
-                const pid_1 = try std.posix.fork();
-                if (pid_1 == 0) {
-                    std.posix.close(fd_set[0]);
-                    _ = try std.posix.dup2(fd_set[1], std.posix.STDOUT_FILENO);
-                    std.posix.close(fd_set[1]);
-                    const err = std.posix.execvpeZ(cmd_1_split[0].?, cmd_1_split, envp);
-
-                    term.print_error("failed to run command: {?s} ({})", .{cmd_1_split[0], err});
-                    std.posix.exit(1);
-                }
-
-                const  pid_2 = try std.posix.fork();
-                if (pid_2 == 0) {
-                    std.posix.close(fd_set[1]);
-                    _ = try std.posix.dup2(fd_set[0], std.posix.STDIN_FILENO);
-                    std.posix.close(fd_set[0]);
-                    const err = std.posix.execvpeZ(cmd_2_split[0].?, cmd_2_split, envp);
-
-                    term.print_error("failed to run command: {?s} ({})", .{cmd_2_split[0], err});
-                    std.posix.exit(1);
-                }
-
-                for (fd_set) |fd| std.posix.close(fd);
-                _ = std.posix.waitpid(pid_1, 0);
-                _ = std.posix.waitpid(pid_2, 0);
-            } else {
-                term.print_error("invalid pipe: missing right-hand side", .{}); 
-                return .{ .code = 1, .quit = true }; // TODO: correct exit code 
-            };
+        if (cmd.opts.pipe_details.out) if (res.items.len > i+1) {
+            cmd.fd_set = try std.posix.pipe();
+            res.items[i+1].opts.pipe_details.in = true;
         } else {
-            final = try do(cmd.raw, term , cmd.opts);
-        }
-        if (final.quit or final.code != 0) break;
+            term.print_error("invalid pipe: missing right-hand side", .{}); 
+            return .{ .code = 1, .quit = false }; // TODO: correct exit code 
+        };
+
+        //if (cmd.opts.pipe_details.in) if (i > 0) {
+        //    cmd.fd_set[0] = res.items[i-1].fd_set[1];
+        //} else {
+        //    term.print_error("invalid pipe: missing left-hand side", .{}); 
+        //    return .{ .code = 1, .quit = false }; // TODO: correct exit code 
+        //};
     }
 
-    return final;
+    i = 0;
+    for (res.items) |*cmd| {
+        defer i += 1;
+        cmd.envp = try std.process.createEnvironFromMap(alloc, &term.env, .{});
+
+        const matched_builtin = std.meta.stringToEnum(Builtins, std.mem.span(cmd.split[0].?)) orelse {
+            cmd.pid = try std.posix.fork();
+            if (cmd.pid == 0) {
+                if (cmd.opts.pipe_details.in) {
+                    const previous = &res.items[i - 1];
+                    _ = try std.posix.dup2(previous.fd_set[0], std.posix.STDIN_FILENO);
+                } else {
+                    _ = try std.posix.dup2(cmd.fd_set[0], std.posix.STDIN_FILENO);
+                }
+                try std.posix.dup2(cmd.fd_set[1], std.posix.STDOUT_FILENO);
+
+                for (res.items) |com| if (com.opts.pipe_details.out) {
+                    std.posix.close(com.fd_set[0]);
+                    std.posix.close(com.fd_set[1]);
+                };
+                final.*.err = std.posix.execvpeZ(cmd.split[0].?, cmd.split, cmd.envp);
+                term.print_error("failed to run command: {?s} (error: {?})", .{cmd.split[0], final.err});
+                std.posix.exit(1);
+            }
+            continue;
+        };
+        cmd.is_builtin = true;
+        if (matched_builtin == .exit) {
+            final.quit = true;
+        } else
+            builtins.do(term, matched_builtin, cmd.*) catch |e| { final.*.err = e; };
+    }
+    for (res.items) |*cmd| if (cmd.opts.pipe_details.out) {
+        std.posix.close(cmd.fd_set[0]);
+        std.posix.close(cmd.fd_set[1]);
+    };
+
+    for (res.items) |cmd| if (!cmd.is_builtin) {
+        _ = std.posix.waitpid(cmd.pid, 0);
+    };
+
+    return final.*;
 }
