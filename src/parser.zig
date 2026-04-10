@@ -114,9 +114,6 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
                     term.stdout_file.handle,
                 },
                 .opts = .{
-                    .stdout = .{ .file = term.stdout_file },
-                    .stderr = .{ .file = term.stderr_file },
-                    .stdin =  .{ .file = term.stdin_file  },
                     .wait = true,
                     .pipe_details = switch (separator) {
                         ';' => .{},
@@ -145,9 +142,6 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
                 term.stdout_file.handle
             },
             .opts = .{
-                .stdin = .{ .file = term.stdin_file, },
-                .stdout = .{ .file = term.stdout_file, },
-                .stderr = .{ .file = term.stderr_file },
                 .wait = true,
             },
         });

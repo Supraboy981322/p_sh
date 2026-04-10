@@ -16,9 +16,6 @@ const IoOpt = struct {
 };
 
 const ExecOpts = struct {
-    stdout:IoOpt = .{},
-    stderr:IoOpt = .{},
-    stdin:IoOpt = .{},
     wait:bool,
     pipe_details:struct {
         out:bool = false,
