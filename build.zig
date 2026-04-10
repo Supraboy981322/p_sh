@@ -3,7 +3,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     //build settings
     const bin = b.addExecutable(.{
-        .name = "shell",
+        .name = "p_sh",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = b.graph.host,

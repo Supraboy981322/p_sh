@@ -1,5 +1,5 @@
 {
-  description = "shell_thing";
+  description = "p_sh";
 
   inputs = {
     # nixpkgs unstable for latest versions
