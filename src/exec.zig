@@ -267,13 +267,21 @@ pub fn parse_and_run(
         const matched_builtin = std.meta.stringToEnum(Builtins, std.mem.span(name)) orelse {
             cmd.pid = try std.posix.fork();
             if (cmd.pid == 0) {
-                if (cmd.opts.pipe_details.in) {
-                    const previous = &res.items[i - 1];
-                    _ = try std.posix.dup2(previous.fd_set[0], std.posix.STDIN_FILENO);
-                } else {
-                    _ = try std.posix.dup2(cmd.fd_set[0], std.posix.STDIN_FILENO);
-                }
-                try std.posix.dup2(cmd.fd_set[1], std.posix.STDOUT_FILENO);
+
+                //stdin
+                try std.posix.dup2(
+                    if (cmd.opts.pipe_details.in)
+                        (&res.items[i - 1]).fd_set[0]
+                    else
+                        cmd.fd_set[0],
+                    std.posix.STDIN_FILENO
+                );
+
+                //stdout
+                try std.posix.dup2(
+                    cmd.fd_set[1],
+                    std.posix.STDOUT_FILENO
+                );
 
                 for (res.items) |com| if (com.opts.pipe_details.out) {
                     std.posix.close(com.fd_set[0]);
