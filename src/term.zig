@@ -171,7 +171,8 @@ pub const Term = struct {
                     else if (string != b)
                         string
                     else {
-                        try res.appendSlice(alloc, "\x1b[33m\""); 
+                        try res.appendSlice(alloc, "\x1b[33m"); 
+                        try res.append(alloc, b);
                         string = 0;
                         continue;
                     },
