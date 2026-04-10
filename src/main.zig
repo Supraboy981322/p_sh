@@ -131,26 +131,17 @@ pub fn main() !void {
                         
                         '3' => {
                             //'delete' key
-                            if (peek(&buf, &i) == '~') if (line.items.len > pos+1) {
-                                const before = try term.alloc.dupe(u8, line.items[0..pos+1]);
-                                const after = try term.alloc.dupe(u8, line.items[pos+1..]);
-                                line.clearAndFree(alloc);
-                                try line.appendSlice(alloc, before);
-                                _ = line.pop();
-                                try line.appendSlice(alloc, after);
-                            } else { _ = line.pop(); } else if (hlp.peek_or_todo(term, &buf, i, ';', "in keyboard shortcuts")) {
+                            if (peek(&buf, &i) == '~') if (line.items.len > pos) {
+                                _ = try hlp.pop_idx(&term, alloc, u8, &line, pos);
+                            } else { } else if (hlp.peek_or_todo(term, &buf, i, ';', "in keyboard shortcuts")) {
                                 i += 1;
                                 switch (peek(&buf, &i)) {
                                     //'ctrl'+'del'
                                     '5' => {
-                                        var b:u8 = 0;
-                                        while (!hlp.contains(&globs.separators, b) and b != 1 and line.items.len > pos) {
-                                            const before = try term.alloc.dupe(u8, line.items[0..pos+1]);
-                                            const after = try term.alloc.dupe(u8, line.items[pos+1..]);
-                                            line.clearAndFree(alloc);
-                                            try line.appendSlice(alloc, before);
-                                            b = if (line.pop()) |popped| popped else 1;
-                                            try line.appendSlice(alloc, after);
+                                        var b:?u8 = 0;
+                                        deep: while (b != null) {
+                                            b = try hlp.pop_idx(&term, alloc, u8, &line, pos);
+                                            if (hlp.contains(&globs.separators, b orelse 0)) break :deep;
                                         }
                                     },
                                     else => term.TODO(
@@ -203,14 +194,8 @@ pub fn main() !void {
                 defer { if (pos > 0) pos -= 1; }
                 if (pos >= line.items.len)
                     _ = line.pop()
-                else {
-                    const before = try term.alloc.dupe(u8, line.items[0..pos]);
-                    const after = try term.alloc.dupe(u8, line.items[pos..]);
-                    line.clearAndFree(alloc);
-                    try line.appendSlice(alloc, before);
-                    _ = line.pop();
-                    try line.appendSlice(alloc, after);
-                }
+                else
+                    _ = try hlp.pop_idx(&term, alloc, u8, &line, pos);
             },
             
             else => {
