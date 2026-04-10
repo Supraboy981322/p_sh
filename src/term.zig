@@ -239,7 +239,7 @@ pub const Term = struct {
                 res.items[k+2] = '3';
                 res.items[k+3] = '1';
             } else
-                if (c.* ==  ' ')
+                if (std.ascii.isWhitespace(c.*))
                     break :loop;
         };
 
