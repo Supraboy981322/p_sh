@@ -137,6 +137,7 @@ pub const Term = struct {
         var i:isize = 0;
         var colorize_next:usize = 0;
         var string:u8 = 0;
+        var name_end:usize = 0; 
 
         while (i < in.len) : (i += 1) {
             const b = in[@intCast(i)];
@@ -209,11 +210,25 @@ pub const Term = struct {
                         else => 1,
                     } else 1;
                 },
-
+                ' ' => {
+                    if (name_end == 0) {
+                        name_end = @intCast(i);
+                        const valid = try self.is_in_path(in[0..name_end]);
+                        if (!valid) for (res.items[0..name_end * 9], 0..) |c, k| {
+                            switch (c) {
+                                '\x1b' => {
+                                    res.items[k+2] = '3';
+                                    res.items[k+3] = '1';
+                                },
+                                else => {},
+                            }
+                        };
+                    }
+                },
                 else => {},
             }
 
-            try res.appendSlice(alloc, "\x1b[0m");
+            try res.appendSlice(alloc, "\x1b[00m");
 
             if (string != 0)
                 try res.appendSlice(alloc, "\x1b[33m");
