@@ -5,7 +5,7 @@ const parser = @import("parser.zig");
 const Term = @import("term.zig").Term;
 const peek = parser.peek_no_state;
 
-const Builtins = enum {
+pub const Builtins = enum {
     exit,
     cd,
 };

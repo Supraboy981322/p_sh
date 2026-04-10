@@ -1,5 +1,6 @@
 const std = @import("std");
 const parser = @import("parser.zig");
+const exec = @import("exec.zig");
 
 pub const Term = struct {
     og:std.os.linux.termios,
@@ -110,6 +111,7 @@ pub const Term = struct {
     }
 
     pub fn is_in_path(self:*Term, name:[]u8) !bool {
+        if (std.meta.stringToEnum(exec.Builtins, name) orelse null) |_| return true;
         if (std.fs.path.isAbsolute(name)) return true;
         const path = self.env.get("PATH") orelse "/bin:/usr/bin";
         var itr = std.mem.tokenizeScalar(u8, path, ':');
