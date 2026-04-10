@@ -21,16 +21,18 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
         try argv.append(alloc, std.mem.span(a));
     };
 
-    switch (name) {
-        .cd => try cd(term, argv.items),
+    (switch (name) {
+        .cd => cd(term, argv.items),
         .exit => {},// TODO: handle this
-    }
+    }) catch |e| switch (e) {
+        else => return e, // TODO: probably want to do something here
+    };
 }
 
 pub fn cd(term:*Term, argv:[][]const u8) !void {
     if (argv.len < 2) {
         term.print_error("not enough args; need a directory", .{});
-        return error.@"file not found";
+        return error.NotEnoughArgs;
     }
     try term.cd(@constCast(argv[1]));
 }

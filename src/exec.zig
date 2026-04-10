@@ -2,6 +2,7 @@ const std = @import("std");
 const globs = @import("globs.zig");
 const parser = @import("parser.zig");
 const builtins = @import("builtins.zig");
+const hlp = @import("helpers.zig");
 
 const Term = @import("term.zig").Term;
 const peek = parser.peek_no_state;
@@ -315,8 +316,17 @@ pub fn parse_and_run(
                     std.posix.close(com.fd_set[0]);
                     std.posix.close(com.fd_set[1]);
                 };
-                final.*.err = std.posix.execvpeZ(cmd.split[0].?, cmd.split, cmd.envp);
-                term.print_error("failed to run command: {?s} (error: {?})", .{cmd.split[0], final.err});
+
+                const err = std.posix.execvpeZ(cmd.split[0].?, cmd.split, cmd.envp);
+                // TODO: figure out how to make these changes reflect in the original process
+                //  (fork communicating with the parent)
+                final.*.err = switch (err) {
+                    error.FileNotFound => error.CommandNotFound,
+                    else => err,
+                };
+                final.*.code = hlp.determine_exit_code(final.*.err.?);
+
+                term.print_error("failed to run command: {?s} (error: {?})", .{ cmd.split[0], final.err });
                 std.posix.exit(1);
             }
             continue;
@@ -325,7 +335,10 @@ pub fn parse_and_run(
         if (matched_builtin == .exit) {
             final.quit = true;
         } else
-            builtins.do(term, matched_builtin, cmd.*) catch |e| { final.*.err = e; };
+            builtins.do(term, matched_builtin, cmd.*) catch |e| {
+                final.*.err = e;
+                final.code = hlp.determine_exit_code(e);
+            };
     }
     for (res.items) |*cmd| if (cmd.opts.pipe_details.out) {
         std.posix.close(cmd.fd_set[0]);
@@ -333,7 +346,9 @@ pub fn parse_and_run(
     };
 
     for (res.items) |cmd| if (!cmd.is_builtin) {
-        _ = std.posix.waitpid(cmd.pid, 0);
+        const result = std.posix.waitpid(cmd.pid, 0);
+        // TODO: figure out how to properly set this (all I get is 256 no matter the error and 0 for ok)
+        if (result.status != 0) final.*.code = 1;
     };
 
     return final.*;

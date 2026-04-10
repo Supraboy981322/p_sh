@@ -86,13 +86,17 @@ pub fn main() !void {
             _ = try stdout.write("\r\n");
             try stdout.flush();
             exit_code = b: {
-                const info = exec.parse_and_run(line.items, &term) catch |e| break :b switch (e) {
-                    error.FileNotFound => 127,
-                    else => {
-                        std.debug.print("{t}\n", .{e});
-                        break :b 126;
-                    }
+                const info = exec.parse_and_run(line.items, &term) catch |e| {
+                    std.debug.print("\n{t}\n", .{e});
+                    break :b 1;
                 };
+                if (info.code == 0 and info.err != null) term.TODO(\\
+                    \\  main shell loop recieved non-zero
+                    \\    exit code, but no error provided
+                    \\      TODO: fix this (recieved information below)
+                    \\  error{{{?t}}} code{{{d}}} quit{{{}}}
+                    , .{ info.err, info.code, info.quit }
+                );
                 quit = info.quit;
                 break :b info.code;
             };
