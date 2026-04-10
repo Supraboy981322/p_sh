@@ -9,13 +9,14 @@ pub const stderr_file = std.fs.File.stderr();
 pub const stderr = &@constCast(&stderr_file.writer(&stderr_buf)).interface;
 
 pub const separators = [_]u8{
-    ' ',  //space
-    '\t', //tabs
-    '\n', //newline
     '/',  //forward slash
     '\'', //single quote
     '"',  //double quote
+    '.',  //dot
+} ++ std.ascii.whitespace
+  ++ cmd_separators;
+
+pub const cmd_separators = [_]u8{
     ';',  //semi-colon
     '|',  //pipe
-    '.',  //dot
 };
