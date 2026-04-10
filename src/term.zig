@@ -216,14 +216,13 @@ pub const Term = struct {
                     if (name_end == 0) {
                         name_end = @intCast(i);
                         const valid = try self.is_in_path(in[0..name_end]);
-                        if (!valid) for (res.items[0..name_end * 9], 0..) |c, k| {
-                            switch (c) {
-                                '\x1b' => {
-                                    res.items[k+2] = '3';
-                                    res.items[k+3] = '1';
-                                },
-                                else => {},
-                            }
+                        if (!valid) inner: for (res.items, 0..) |*c, k| {
+                            if (c.* == '\x1b') {
+                                res.items[k+2] = '3';
+                                res.items[k+3] = '1';
+                            } else
+                                if (c.* ==  ' ')
+                                    break :inner;
                         };
                     }
                 },
