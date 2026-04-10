@@ -9,6 +9,64 @@ const Builtins = enum {
     cd,
 };
 
+const IoOpt = struct {
+    file:?*std.fs.File = null,
+    is_file:bool = false,
+    is_pipe:bool = false,
+};
+
+const ExecOpts = struct {
+    stdout:IoOpt = .{},
+    stderr:IoOpt = .{},
+    stdin:IoOpt = .{},
+    wait:bool,
+    pipe_details:?struct {
+        out:bool = false,
+    } = null,
+};
+
+pub const Cmd = struct {
+    raw:[]u8,
+    opts:ExecOpts = .{ .wait = true },
+    pub fn print(self:*Cmd) void {
+        std.debug.print(
+            \\Cmd = .{{
+            \\  .raw = {s},
+            \\  .opts = .{{
+            \\     .wait = {},
+            \\     .stdout = .{{
+            \\        .file = {?d},
+            \\        .is_file = {},
+            \\        .is_pipe = {},
+            \\      }},
+            \\     .stdin = .{{
+            \\        .file = {?d},
+            \\        .is_file = {},
+            \\        .is_pipe = {},
+            \\      }},
+            \\     .stderr = .{{
+            \\        .file = {?d},
+            \\        .is_file = {},
+            \\        .is_pipe = {},
+            \\      }},
+            \\   }},
+            \\}};
+            ++ "\n", .{
+                self.raw,
+                self.opts.wait,
+                if (self.opts.stdout.file) |file| file.handle else null,  self.opts.stdout.is_file, self.opts.stdout.is_pipe,
+                if (self.opts.stdin.file)  |file| file.handle else null,  self.opts.stdin.is_file,  self.opts.stdin.is_pipe,
+                if (self.opts.stderr.file) |file| file.handle else null,  self.opts.stderr.is_file, self.opts.stderr.is_pipe,
+            }
+        );
+    }
+};
+
+pub const ExecResult = struct {
+    code:u8,
+    quit:bool = false
+};
+
 pub fn do(
     cmd:[]u8,
     term:*Term
