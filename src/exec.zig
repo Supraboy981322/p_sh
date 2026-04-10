@@ -206,76 +206,8 @@ pub fn system_command(
     return 0;
 }
 
-pub fn parse_and_run(
-    line:[]u8,
-    term:*Term
-) !ExecResult {
-    const alloc = term.alloc;
-    var mem = try std.ArrayList(u8).initCapacity(alloc, 0);
-    defer _ = mem.deinit(alloc);
-
-    var res = try std.ArrayList(Cmd).initCapacity(alloc, 0);
-    defer _ = res.deinit(alloc);
-
+pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
     var i:usize = 0;
-    var string:u8 = 0;
-    loop: while (i < line.len) : (i += 1) {
-        const b = line[i];
-        if (!std.ascii.isWhitespace(b) and string == 0) for (globs.cmd_separators) |separator| if (b == separator) {
-            try res.append(alloc, .{
-                .raw = try mem.toOwnedSlice(alloc),
-                .fd_set = .{
-                    term.stdin_file.handle,
-                    term.stdout_file.handle,
-                },
-                .opts = .{
-                    .stdout = .{ .file = term.stdout_file },
-                    .stderr = .{ .file = term.stderr_file },
-                    .stdin =  .{ .file = term.stdin_file  },
-                    .wait = true,
-                    .pipe_details = switch (separator) {
-                        ';' => .{},
-                        '|' => .{
-                            .out = true,
-                        },
-                        else => std.debug.panic("TODO: cmd separator |{c}|", .{separator}), 
-                    }
-                },
-            });
-            continue :loop;
-        };
-
-        if ((b == '"' or b == '\'') and string == 0)
-            string = b
-        else if (string == b)
-            string = 0;
-
-        try mem.append(alloc, b);
-    }
-    if (mem.items.len > 0) {
-        try res.append(alloc, .{
-            .raw = try mem.toOwnedSlice(alloc),
-            .fd_set = .{
-                term.stdin_file.handle,
-                term.stdout_file.handle
-            },
-            .opts = .{
-                .stdin = .{ .file = term.stdin_file, },
-                .stdout = .{ .file = term.stdout_file, },
-                .stderr = .{ .file = term.stderr_file },
-                .wait = true,
-            },
-        });
-    }
-
-    var final:*ExecResult = @constCast(&ExecResult{
-        .quit = false,
-        .code = 0,
-        .err = null,
-    });
-    _ = &final;
-
-    i = 0;
     for (res.items) |*cmd| {
         defer i += 1;
         cmd.split = try parser.split_args(cmd.raw, term);
@@ -285,23 +217,46 @@ pub fn parse_and_run(
             res.items[i+1].opts.pipe_details.in = true;
         } else {
             term.print_error("invalid pipe: missing right-hand side", .{}); 
-            return .{ .code = 1, .quit = false }; // TODO: correct exit code 
+            return false; // TODO: correct exit code 
         };
+    }
+    return true;
+}
 
-        //if (cmd.opts.pipe_details.in) if (i > 0) {
-        //    cmd.fd_set[0] = res.items[i-1].fd_set[1];
-        //} else {
-        //    term.print_error("invalid pipe: missing left-hand side", .{}); 
-        //    return .{ .code = 1, .quit = false }; // TODO: correct exit code 
-        //};
+pub fn parse_and_run(
+    line:[]u8,
+    term:*Term
+) !ExecResult {
+    const alloc = term.alloc;
+    var res = try std.ArrayList(Cmd).initCapacity(alloc, 0);
+    defer {
+        for (res.items) |*cmd| cmd.free(alloc);
+        _ = res.deinit(alloc);
     }
 
-    i = 0;
+    try parser.split_command(term, &res, line);
+
+    var final:*ExecResult = @constCast(&ExecResult{
+        .quit = false,
+        .code = 0,
+        .err = null,
+    });
+    _ = &final;
+
+    if (!try populate_fd_sets(term, &res))
+        return .{ .code = 2, .quit = false };
+
+    var i:usize = 0;
     for (res.items) |*cmd| {
         defer i += 1;
         cmd.envp = try std.process.createEnvironFromMap(alloc, &term.env, .{});
 
-        const matched_builtin = std.meta.stringToEnum(Builtins, std.mem.span(cmd.split[0].?)) orelse {
+        const name = cmd.split[0] orelse {
+            final.code = 2;
+            return final.*;
+        };
+
+        const matched_builtin = std.meta.stringToEnum(Builtins, std.mem.span(name)) orelse {
             cmd.pid = try std.posix.fork();
             if (cmd.pid == 0) {
                 if (cmd.opts.pipe_details.in) {
@@ -340,6 +295,7 @@ pub fn parse_and_run(
                 final.code = hlp.determine_exit_code(e);
             };
     }
+
     for (res.items) |*cmd| if (cmd.opts.pipe_details.out) {
         std.posix.close(cmd.fd_set[0]);
         std.posix.close(cmd.fd_set[1]);
