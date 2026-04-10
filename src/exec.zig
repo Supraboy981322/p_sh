@@ -253,9 +253,10 @@ pub fn parse_and_run(
     if (!try populate_fd_sets(term, &res))
         return .{ .code = 2, .quit = false };
 
-    var i:usize = 0;
-    for (res.items) |*cmd| {
-        defer i += 1;
+    
+    //start each command
+    for (res.items, 0..) |*cmd, i| {
+        // TODO: should I just move this out of the loop, will it ever change between spawning processes?
         cmd.envp = try std.process.createEnvironFromMap(alloc, &term.env, .{});
 
         const name = cmd.split[0] orelse {
@@ -303,11 +304,13 @@ pub fn parse_and_run(
             };
     }
 
+    //close file descriptors (they're duped in forked processes)
     for (res.items) |*cmd| if (cmd.opts.pipe_details.out) {
         std.posix.close(cmd.fd_set[0]);
         std.posix.close(cmd.fd_set[1]);
     };
 
+    //wait for each command to finish
     for (res.items) |cmd| if (!cmd.is_builtin) {
         const result = std.posix.waitpid(cmd.pid, 0);
         // TODO: figure out how to properly set this (all I get is 256 no matter the error and 0 for ok)
