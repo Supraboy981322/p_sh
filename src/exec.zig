@@ -211,9 +211,10 @@ pub fn parse_and_run(
     defer _ = res.deinit(alloc);
 
     var i:usize = 0;
+    var string:u8 = 0;
     loop: while (i < line.len) : (i += 1) {
         const b = line[i];
-        if (!std.ascii.isWhitespace(b)) for (globs.cmd_separators) |separator| if (b == separator) {
+        if (!std.ascii.isWhitespace(b) and string == 0) for (globs.cmd_separators) |separator| if (b == separator) {
             try res.append(alloc, .{
                 .raw = try mem.toOwnedSlice(alloc),
                 .opts = .{
@@ -232,6 +233,12 @@ pub fn parse_and_run(
             });
             continue :loop;
         };
+
+        if ((b == '"' or b == '\'') and string == 0)
+            string = b
+        else if (string == b)
+            string = 0;
+
         try mem.append(alloc, b);
     }
     if (mem.items.len > 0) {
