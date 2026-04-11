@@ -1,4 +1,5 @@
 const std = @import("std");
+const hlp = @import("helpers.zig");
 const globs = @import("globs.zig");
 
 const Cmd = @import("exec.zig").Cmd;
@@ -152,4 +153,131 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
             },
         });
     }
+}
+
+pub fn colorize(term:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
+    const alloc = term.alloc;
+    var res = try std.ArrayList(u8).initCapacity(alloc, 0);
+    defer _ = res.deinit(alloc);
+
+    const peek = peek_no_state;
+    const peekN = peekN_no_state;
+
+    var i:isize = 0;
+    var colorize_next:usize = 0;
+    var string:u8 = 0;
+    var name_end:usize = 0; 
+
+    while (i < in.len) : (i += 1) {
+        const b = in[@intCast(i)];
+        if (hlp.contains(&globs.separators, b) and name_end == 0)
+            name_end = @intCast(i);
+
+        var j:usize = @intCast(i);
+        var next:usize = @intCast(i+1);
+
+        switch (b) {
+
+            '#' => if (string == 0) {
+                try res.appendSlice(alloc, "\x1b[0;3;38;2;115;115;150m");
+                for (in[j..]) |c| try res.append(alloc, c);
+                break;
+            },
+
+            '$' => {
+                const name = try seek_var_name(alloc, in, &j);
+                defer alloc.free(name);
+                colorize_next = name.len + 1;
+            },
+
+            '"', '\'' => string =
+                if (string == 0)
+                    b
+                else if (string != b)
+                    string
+                else {
+                    try res.appendSlice(alloc, "\x1b[33m"); 
+                    try res.append(alloc, b);
+                    string = 0;
+                    continue;
+                },
+
+            // TODO: change this (currently breaks cursor position)
+            '\t' => {
+                try res.append(alloc, ' ');
+                continue;
+            },
+
+            '\\' => {
+                try res.appendSlice(alloc, "\x1b[34m");
+                colorize_next = if (in.len > i+1) switch (in[@intCast(i+1)]) {
+
+                    '0'...'3' => for ([_]bool{
+                        peek(in, &j) >= '0',
+                        peek(in, &j) <= '7',
+                        peek(in, &next) >= '0',
+                        peek(in, &next) <= '7',
+                        peek(in, @constCast(&@as(usize, next+1))) >= '0',
+                        peek(in, @constCast(&@as(usize, next+1))) <= '7',
+                    }) |check| {
+                        if (!check) break 1;
+                    } else 4,
+
+                    'x' => for (peekN(in, j+1, 3)) |c| {
+                        break for ([_]bool{
+                            c >= '0' and c <= '9',
+                            c >= 'a' and c <= 'f',
+                            c >= 'A' and c <= 'F',
+                        }) |check| {
+                            if (check) break @as(u8, 4);
+                        } else @as(u8, 1);
+                    } else @as(u8, 1),
+
+                    '#' => {
+                        try res.appendSlice(alloc, "\\#");
+                        i += 1;
+                        continue;
+                    },
+
+                    else => 1,
+                } else 1;
+            },
+            else => {},
+        }
+
+        try res.appendSlice(
+            alloc,
+            if (hlp.contains(@constCast(&globs.cmd_separators), b))
+                "\x1b[36m"
+            else
+                "\x1b[00m"
+        );
+
+        if (string != 0)
+            try res.appendSlice(alloc, "\x1b[33m");
+
+        if (colorize_next > 0) {
+            try res.appendSlice(alloc, "\x1b[34m");
+            colorize_next -= 1;
+        }
+
+        try res.append(alloc, b);
+        try res.appendSlice(alloc, "\x1b[0m");
+    }
+
+    const name = in[0 .. if (name_end > 0) name_end else in.len ];
+    const valid = try term.is_in_path(name);
+    if (!valid) loop: for (res.items, 0..) |*c, k| {
+        if (c.* == '\x1b') {
+            res.items[k+2] = '3';
+            res.items[k+3] = '1';
+        } else
+            if (hlp.contains(&globs.separators, c.*))
+                break :loop;
+    };
+
+    return .{
+        .line = try res.toOwnedSlice(alloc),
+        .cmd_ok = valid,
+    };
 }

@@ -3,6 +3,7 @@ const exec = @import("exec.zig");
 const globs = @import("globs.zig");
 const hlp = @import("helpers.zig");
 const keyboard = @import("keyboard.zig");
+const parser = @import("parser.zig");
 
 const stdout = globs.stdout;
 const stderr = globs.stderr;
@@ -60,7 +61,7 @@ pub fn main() !void {
         defer _ = arena.deinit();
         term.alloc = arena.allocator();
 
-        const colorized = try term.colorize(line.items);
+        const colorized = try parser.colorize(&term, line.items);
         const ps1_char:u8 = if (exit_code == 0 and colorized.cmd_ok) '?' else '!';
         try stdout.print(
             "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{s}\x1b[3;36m](\x1b[3{d}m{c}\x1b[36m):\x1b[0m\x1b[s {s}\x1b[u\x1b[{d}C",
