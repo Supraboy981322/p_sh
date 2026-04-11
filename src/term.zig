@@ -4,6 +4,8 @@ const exec = @import("exec.zig");
 const globs = @import("globs.zig");
 const hlp = @import("helpers.zig");
 
+const Hist = globs.Hist;
+
 pub const Term = struct {
     og:std.os.linux.termios,
     raw:std.os.linux.termios,
@@ -16,6 +18,7 @@ pub const Term = struct {
     env:std.process.EnvMap,
 
     permanent_alloc:std.mem.Allocator,
+    hist:*Hist,
 
     vars:struct {
         aliases:?std.StringHashMap([]u8) = null,
@@ -50,6 +53,7 @@ pub const Term = struct {
         stderr:*std.fs.File,
         stdout:*std.fs.File,
         env:?std.process.EnvMap,
+        hist:*Hist,
     ) !Term {
         const og = try std.posix.tcgetattr(stdin.handle);
         var raw = og;
@@ -66,6 +70,7 @@ pub const Term = struct {
             .alloc = alloc,
             .env = if (env) |e| e else try std.process.getEnvMap(alloc),
             .permanent_alloc = alloc,
+            .hist = hist,
         };
         try res.cd(@constCast("."));
         res.read_config() catch |e|

@@ -5,6 +5,7 @@ const exec = @import("exec.zig");
 const Cmd = exec.Cmd;
 
 pub const Valid = enum {
+    history,
     exit,
     cd,
 };
@@ -23,6 +24,7 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
 
     (switch (name) {
         .cd => cd(term, argv.items),
+        .history => history(term, argv.items),
         .exit => {},// TODO: handle this
     }) catch |e| switch (e) {
         else => return e, // TODO: probably want to do something here
@@ -35,4 +37,11 @@ pub fn cd(term:*Term, argv:[][]const u8) !void {
         return error.NotEnoughArgs;
     }
     try term.cd(@constCast(argv[1]));
+}
+
+pub fn history(term:*Term, argv:[][]const u8) !void {
+    if (argv.len > 1)
+        term.TODO("history command args", .{});
+    for (term.hist.arr[0..term.hist.len], 0..) |line, i|
+        term.print("{d}: {s}\n", .{i, line});
 }

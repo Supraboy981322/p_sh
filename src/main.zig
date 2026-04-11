@@ -21,13 +21,17 @@ pub fn main() !void {
 
     if (!stdin_file.isTty())
         @panic("TODO: non-tty"); // TODO: non-tty
-    
+
+    var hist = try globs.Hist.init(&perm_alloc, 100);
+    defer hist.deinit();
+
     var term = try @import("term.zig").Term.init(
         perm_alloc,
         &stdin_file,
         &stderr_file,
         &stdout_file,
-        null
+        null,
+        &hist,
     ); 
 
     defer {
@@ -37,9 +41,6 @@ pub fn main() !void {
 
     const alloc = term.alloc;
     try term.mk_raw();
-
-    var hist = try globs.Hist.init(&perm_alloc, 100);
-    defer hist.deinit();
 
     var line = try std.ArrayList(u8).initCapacity(alloc, 0);
     var line_mem:[]u8 = try perm_alloc.alloc(u8, 0);
@@ -88,42 +89,56 @@ pub fn main() !void {
         const n = try std.posix.read(stdin_file.handle, &buf);
 
         //for (buf[0..n]) |k| std.debug.print("{d} ({x}) |{c}|\n", .{k, k, k});
-        const stuff = try keyboard.do(alloc, &term, &line, &buf, n, &pos);
+        var stuff = try keyboard.do(alloc, &term, &line, &buf, n, &pos);
 
-        if (stuff.hist_back) {
-            if (hist_pos > 0) {
-                defer {
-                    pos = line.items.len;
-                    std.debug.print("\n{s}\n", .{line_mem});
+        if (stuff.hist_change != 0) {
+            defer pos = line.items.len;
+            var did_change:bool = false;
+            if (stuff.hist_change > 0 and hist_pos < hist.len) {
+                while (stuff.hist_change > 0) : (stuff.hist_change -= 1) {
+                    if (hist_pos < hist.len)
+                        hist_pos += 1
+                    else
+                        break;
                 }
-                hist_pos -= 1;
-                if (hist_pos == 0) {
+                did_change = true;
+            }
+            if (stuff.hist_change < 0 and hist_pos > 0) {
+                while (stuff.hist_change < 0) : (stuff.hist_change += 1) {
+                    if (hist_pos > 0)
+                        hist_pos -= 1
+                    else
+                        break;
+                }
+                did_change = true;
+            }
+            if (hist_pos == hist.len and did_change) {
+                const old_line = try alloc.dupe(u8, line_mem);
+                defer alloc.free(old_line);
+
+                perm_alloc.free(line_mem);
+
+                line_mem = try perm_alloc.alloc(u8, 0);
+
+                line.clearAndFree(alloc);
+
+                try line.appendSlice(alloc, old_line);
+            } else if (did_change) {
+                if (line_mem.len == 0) {
                     perm_alloc.free(line_mem);
-                    line_mem = try line.toOwnedSlice(perm_alloc);
+                    line_mem = try perm_alloc.dupe(u8, line.items);
                 }
                 line.clearAndFree(alloc);
-                try line.appendSlice(alloc, hist.arr[hist.len - 1]);
-            }
-        }
-
-        if (stuff.hist_forward) {
-            if (hist_pos < hist.max) {
-                defer {
-                    pos = line.items.len;
-                    std.debug.print("\n{s}\n", .{line_mem});
-                }
-                hist_pos += 1;
-                if (hist_pos == hist.max) {
-                    try line.appendSlice(alloc, line_mem);
-                    perm_alloc.free(line_mem);
-                } else
-                    try line.appendSlice(alloc, hist.arr[hist.len - 1]);
+                try line.appendSlice(alloc, hist.arr[hist_pos]);
             }
         }
 
         if (stuff.run) {
+            perm_alloc.free(line_mem);
+            line_mem = try perm_alloc.dupe(u8, line.items);
             try term.revert();
             try hist.append(line.items);
+            hist_pos = hist.len;
             defer {
                 pos = 0;
                 line.clearAndFree(alloc);

@@ -9,8 +9,7 @@ const stdout = globs.stdout;
 
 const Actions = struct {
     run:bool = false,
-    hist_back:bool = false,
-    hist_forward:bool = false,
+    hist_change:isize = 0,
 };
 
 pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8, n:usize, pos:*usize) !Actions {
@@ -43,8 +42,8 @@ pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8
             while (i < n) : (i += 1) {
                 switch (buf[i]) {
                      // TODO: history
-                    'A' => { res.hist_forward = true; }, // up arrow
-                    'B' => { res.hist_back = true; }, // down arrow
+                    'A' => { res.hist_change -= 1; }, // up arrow
+                    'B' => { res.hist_change += 1; }, // down arrow
 
                     //left arrow
                     'D' => {
