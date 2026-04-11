@@ -144,6 +144,16 @@ pub const Term = struct {
         }
         return false;
     }
+    
+    pub fn pretty_path(self:*Term) ![]u8 {
+        const raw = try self.cwd().realpathAlloc(self.alloc, ".");
+        const home = self.env.get("HOME") orelse return raw;
+        if (std.mem.startsWith(u8, raw, home)) {
+            defer self.alloc.free(raw);
+            return try std.mem.replaceOwned(u8, self.alloc, raw, home, "~");
+        } else
+            return raw;
+    }
 
     pub fn read_config(term:*Term) !void {
         const Category = enum{ aliases };

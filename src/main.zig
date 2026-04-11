@@ -64,10 +64,12 @@ pub fn main() !void {
 
         const colorized = try parser.colorize(&term, line.items);
         const ps1_char:u8 = if (exit_code == 0 and colorized.cmd_ok) '?' else '!';
+        const pretty_path = try term.pretty_path();
         try stdout.print(
-            "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{s}\x1b[3;36m](\x1b[3{d}m{c}\x1b[36m):\x1b[0m\x1b[s {s}\x1b[u\x1b[{d}C",
+            "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{s}\x1b[3;36m]"
+                ++ "(\x1b[3{d}m{c}\x1b[36m):\x1b[0m\x1b[s {s}\x1b[u\x1b[{d}C",
             .{
-                try term.cwd().realpathAlloc(term.alloc, "."),
+                pretty_path,
                 @as(u8, if (ps1_char == '?') 2 else 1),
                 ps1_char,
                 colorized.line,
@@ -77,6 +79,7 @@ pub fn main() !void {
         exit_code = 0;
         try stdout.flush();
         term.alloc.free(colorized.line);
+        term.alloc.free(pretty_path);
 
         stdout.flush() catch {};
         stderr.flush() catch {};
