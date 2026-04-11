@@ -7,8 +7,15 @@ const peek = @import("parser.zig").peek_no_state;
 
 const stdout = globs.stdout;
 
-pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8, n:usize, pos:*usize) !struct { run:bool } {
+const Actions = struct {
+    run:bool = false,
+    hist_back:bool = false,
+    hist_forward:bool = false,
+};
+
+pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8, n:usize, pos:*usize) !Actions {
     var i:usize = 0;
+    var res = Actions{};
     inner: while (i < n) : (i += 1) switch (buf[i]) {
 
         //'ctrl'+'c'
@@ -32,20 +39,12 @@ pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8
 
         // TODO: keyboard shortcuts
         '\x1b' => {
-            //if (buf[i + 1] != '[') {
-            //    pos += 1;
-            //    if (pos >= line.items.len)
-            //        try line.append(alloc, buf[i])
-            //    else
-            //        line.items[pos] = buf[i];
-            //    continue :inner;
-            //}
             i += 2;
             while (i < n) : (i += 1) {
                 switch (buf[i]) {
                      // TODO: history
-                    'A' => {}, // up arrow
-                    'B' => {}, // down arrow
+                    'A' => { res.hist_forward = true; }, // up arrow
+                    'B' => { res.hist_back = true; }, // down arrow
 
                     //left arrow
                     'D' => {
@@ -93,7 +92,7 @@ pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8
                 for (0..2) |_| _ = try stdout.write("\r\n");
                 continue :inner;
             }
-            return .{ .run = true };
+            res.run = true;
         },
 
         '\x08', '\x7f' => {
@@ -118,5 +117,5 @@ pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8
             }
         },
     };
-    return .{ .run = false };
+    return res;
 }

@@ -12,6 +12,7 @@ const peek = @import("parser.zig").peek_no_state;
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
+    var perm_alloc = gpa.allocator();
     
     var stdin_file = std.fs.File.stdin();
     var stdout_file =std.fs.File.stdout();
@@ -21,7 +22,7 @@ pub fn main() !void {
         @panic("TODO: non-tty"); // TODO: non-tty
     
     var term = try @import("term.zig").Term.init(
-        gpa.allocator(),
+        perm_alloc,
         &stdin_file,
         &stderr_file,
         &stdout_file,
@@ -36,11 +37,19 @@ pub fn main() !void {
     const alloc = term.alloc;
     try term.mk_raw();
 
+    var hist = try globs.Hist.init(&perm_alloc, 100);
+    defer hist.deinit();
+
     var line = try std.ArrayList(u8).initCapacity(alloc, 0);
-    defer _ = line.deinit(alloc);
+    var line_mem:[]u8 = try perm_alloc.alloc(u8, 0);
+    defer {
+        _ = line.deinit(alloc);
+        perm_alloc.free(line_mem);
+    }
 
     var pos:usize = 0;
     var exit_code:u8 = 0;
+    var hist_pos:usize = hist.len;
     loop: while (true) {
         defer {
             //a soft boundary is enough
@@ -51,7 +60,7 @@ pub fn main() !void {
         defer _ = arena.deinit();
         term.alloc = arena.allocator();
 
-        const colorized =  try term.colorize(line.items);
+        const colorized = try term.colorize(line.items);
         const ps1_char:u8 = if (exit_code == 0 and colorized.cmd_ok) '?' else '!';
         try stdout.print(
             "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{s}\x1b[3;36m](\x1b[3{d}m{c}\x1b[36m):\x1b[0m\x1b[s {s}\x1b[u\x1b[{d}C",
@@ -75,9 +84,42 @@ pub fn main() !void {
 
         //for (buf[0..n]) |k| std.debug.print("{d} ({x}) |{c}|\n", .{k, k, k});
         const stuff = try keyboard.do(alloc, &term, &line, &buf, n, &pos);
+
+        if (stuff.hist_back) {
+            if (hist_pos > 0) {
+                defer {
+                    pos = line.items.len;
+                    std.debug.print("\n{s}\n", .{line_mem});
+                }
+                hist_pos -= 1;
+                if (hist_pos == 0) {
+                    perm_alloc.free(line_mem);
+                    line_mem = try line.toOwnedSlice(perm_alloc);
+                }
+                line.clearAndFree(alloc);
+                try line.appendSlice(alloc, hist.arr[hist.len - 1]);
+            }
+        }
+
+        if (stuff.hist_forward) {
+            if (hist_pos < hist.max) {
+                defer {
+                    pos = line.items.len;
+                    std.debug.print("\n{s}\n", .{line_mem});
+                }
+                hist_pos += 1;
+                if (hist_pos == hist.max) {
+                    try line.appendSlice(alloc, line_mem);
+                    perm_alloc.free(line_mem);
+                } else
+                    try line.appendSlice(alloc, hist.arr[hist.len - 1]);
+            }
+        }
+
         if (stuff.run) {
             try term.revert();
             var quit:bool = false;
+            try hist.append(line.items);
             defer {
                 pos = 0;
                 line.clearAndFree(alloc);
