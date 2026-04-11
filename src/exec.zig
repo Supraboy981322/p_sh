@@ -106,11 +106,11 @@ pub fn parse_and_run(
 
     try parser.split_command(term, &res, line);
 
-    var final:*ExecResult = @constCast(&ExecResult{
+    var final:ExecResult = ExecResult{
         .quit = false,
         .code = 0,
         .err = null,
-    });
+    };
     _ = &final;
 
     if (!try populate_fd_sets(term, &res))
@@ -124,7 +124,7 @@ pub fn parse_and_run(
 
         _ = cmd.split[0] orelse {
             final.code = 2;
-            return final.*;
+            return final;
         };
 
         const matched_builtin = std.meta.stringToEnum(Builtins, std.mem.span(cmd.split[0].?)) orelse {
@@ -154,18 +154,18 @@ pub fn parse_and_run(
                 const err = std.posix.execvpeZ(cmd.split[0].?, cmd.split, cmd.envp);
                 // TODO: figure out how to make these changes reflect in the original process
                 //  (fork communicating with the parent)
-                final.*.err = switch (err) {
+                final.err = switch (err) {
                     error.FileNotFound => error.CommandNotFound,
                     else => err,
                 };
-                final.*.code = hlp.determine_exit_code(final.*.err.?);
+                final.code = hlp.determine_exit_code(final.err.?);
 
                 term.print_error("failed to run command: {?s} ({t})", .{ cmd.split[0], final.err orelse unreachable });
                 std.posix.exit(1);
             }
             if (!cmd.opts.piped and cmd.opts.wait) {
                 const result = std.posix.waitpid(cmd.pid, 0);
-                if (result.status != 0) final.*.code = 1;
+                if (result.status != 0) final.code = 1;
                 cmd.opts.wait = false;
             }
             continue;
@@ -175,7 +175,7 @@ pub fn parse_and_run(
             final.quit = true;
         } else
             builtins.do(term, matched_builtin, cmd.*) catch |e| {
-                final.*.err = e;
+                final.err = e;
                 final.code = hlp.determine_exit_code(e);
             };
     }
@@ -190,8 +190,14 @@ pub fn parse_and_run(
     for (res.items) |cmd| if (!cmd.is_builtin and cmd.opts.wait) {
         const result = std.posix.waitpid(cmd.pid, 0);
         // TODO: figure out how to properly set this (all I get is 256 no matter the error and 0 for ok)
-        if (result.status != 0) final.*.code = 1;
+        if (result.status != 0) final.code = 1;
     };
 
-    return final.*;
+    return final;
+}
+
+// TODO: return to this (stuff like $(...) and `...`)
+pub fn run_and_collect(term:*Term, cmd:Cmd) ![]u8 {
+    _ = .{ term, cmd };
+    return "";
 }

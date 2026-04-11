@@ -77,7 +77,6 @@ pub fn main() !void {
                 pos + 1,
             }
         );
-        exit_code = 0;
         try stdout.flush();
         term.alloc.free(colorized.line);
         term.alloc.free(pretty_path);
@@ -149,9 +148,10 @@ pub fn main() !void {
             try stdout.flush();
             exit_code = b: {
                 const info = exec.parse_and_run(line.items, &term) catch |e| {
-                    std.debug.print("\n{t}\n", .{e});
+                    std.debug.print("\n\n{t}\n\n", .{e});
                     break :b 1;
                 };
+
                 if (info.code == 0 and info.err != null) term.TODO(\\
                     \\  main shell loop recieved non-zero
                     \\    exit code, but no error provided
