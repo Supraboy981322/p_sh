@@ -51,7 +51,8 @@ pub fn main() !void {
     var pos:usize = 0;
     var exit_code:u8 = 0;
     var hist_pos:usize = hist.len;
-    loop: while (true) {
+    var quit:bool = false;
+    loop: while (!quit) {
         defer {
             //a soft boundary is enough
             if (pos > line.items.len) pos = line.items.len;
@@ -119,7 +120,6 @@ pub fn main() !void {
 
         if (stuff.run) {
             try term.revert();
-            var quit:bool = false;
             try hist.append(line.items);
             defer {
                 pos = 0;
