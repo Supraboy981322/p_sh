@@ -13,7 +13,13 @@ pub var separators = [_]u8{
     '\'', //single quote
     '"',  //double quote
     '.',  //dot
-} ++ std.ascii.whitespace
+} ++ thing_separators;
+
+//I hate that I have to do this
+pub var non_const_separators:[]u8 = @constCast(&thing_separators);
+
+pub const thing_separators = [_]u8 {
+} ++  std.ascii.whitespace
   ++ cmd_separators;
 
 pub const cmd_separators = [_]u8{
