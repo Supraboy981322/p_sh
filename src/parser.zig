@@ -15,8 +15,16 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
         _ = mem2.deinit(alloc);
         _ = res.deinit(alloc);
     }
-    var str_type:u8, var esc:bool = .{ 0, false };
-    var i:usize = 0;
+    var i:usize,
+        var str_type:u8,
+        var esc,
+        var start_of_thing = .{
+            0,
+            0,
+            false,
+            false
+        };
+
     loop: while (i < in.len) : (i += 1) {
         const b = in[i];
         if (esc) {
@@ -27,6 +35,23 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
             try mem.append(alloc, b);
             esc = false;
             continue :loop;
+        }
+        if (start_of_thing) {
+            defer start_of_thing = false;
+            switch (b) {
+                '~' => {
+                    try mem.appendSlice(
+                        alloc,
+                        term.env.get("HOME") orelse "~"
+                    );
+                    continue :loop;
+                },
+                else => {},
+            }
+        } else if (
+            hlp.contains(globs.non_const_separators, b) and str_type == 0
+        ) {
+            start_of_thing = true;
         }
         switch (b) {
 
