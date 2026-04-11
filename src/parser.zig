@@ -15,6 +15,7 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
         _ = mem2.deinit(alloc);
         _ = res.deinit(alloc);
     }
+
     var i:usize,
         var str_type:u8,
         var esc,
@@ -27,6 +28,7 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
 
     loop: while (i < in.len) : (i += 1) {
         const b = in[i];
+
         if (esc) {
             if (!std.ascii.isWhitespace(b)) switch (b) {
                 '"', '\'', '$', '#' => {},
@@ -36,6 +38,7 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
             esc = false;
             continue :loop;
         }
+
         if (start_of_thing) {
             defer start_of_thing = false;
             switch (b) {
@@ -53,6 +56,7 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
         ) {
             start_of_thing = true;
         }
+
         switch (b) {
 
             '"', '\'' => {
@@ -279,9 +283,10 @@ pub fn colorize(term:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
         );
 
         if (string != 0)
-            try res.appendSlice(alloc, "\x1b[33m");
-
-        if (colorize_next > 0) {
+            try res.appendSlice(alloc, "\x1b[33m")
+        else if (std.ascii.isDigit(b))
+            try res.appendSlice(alloc, "\x1b[34m")
+        else if (colorize_next > 0) {
             try res.appendSlice(alloc, "\x1b[34m");
             colorize_next -= 1;
         }
