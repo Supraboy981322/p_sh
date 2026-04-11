@@ -68,7 +68,14 @@ pub const Term = struct {
             .permanent_alloc = alloc,
         };
         try res.cd(@constCast("."));
-        res.read_config() catch |e| res.print_error("{t}", .{e});
+        res.read_config() catch |e|
+            if (e == error.FileNotFound)
+                res.print_error(
+                    "no config file found ({s}/.p_shrc); using default settings",
+                    .{res.env.get("HOME") orelse "$HOME"}
+                )
+            else
+                res.print_error("failed to read config: {t}", .{e});
         return res;
     }
 
@@ -277,10 +284,7 @@ pub const Term = struct {
             break :b buf[0..wr.end];
         };
 
-        var config_file = term.cwd().openFile(config_path, .{}) catch |e| {
-            term.print_error("{t}", .{e});
-            return e;
-        };
+        var config_file = try term.cwd().openFile(config_path, .{});
         var buf:[1024]u8 = undefined;
         var reader = &@constCast(&config_file.reader(&buf)).interface;
         defer config_file.close();
