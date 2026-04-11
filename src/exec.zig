@@ -17,6 +17,7 @@ const IoOpt = struct {
 
 const ExecOpts = struct {
     wait:bool,
+    piped:bool,
     pipe_details:struct {
         out:bool = false,
         in:bool = false,
@@ -28,7 +29,7 @@ pub const Cmd = struct {
     split:[*:null]const ?[*:0]const u8 = undefined,
     fd_set:[2]std.posix.fd_t,
     pid:std.posix.pid_t = undefined,
-    opts:ExecOpts = .{ .wait = true },
+    opts:ExecOpts = .{ .wait = true, .piped = false },
     envp:[*:null]const ?[*:0]const u8 = undefined, // TODO: determine if I should free this
     is_builtin:bool = false,
     
@@ -49,6 +50,7 @@ pub const Cmd = struct {
             \\  .envp = [very large C-style null-terminated array of pointers to 0 terminated c strings],
             \\  .opts = .{{
             \\     .wait = {},
+            \\     .piped = {},
             \\     .pipe_details = {{
             \\          .out = {},
             \\          .in = {},
@@ -60,6 +62,7 @@ pub const Cmd = struct {
                 self.fd_set[0], self.fd_set[1],
                 self.is_builtin,
                 self.opts.wait,
+                self.opts.piped,
                 self.opts.pipe_details.out,
                 self.opts.pipe_details.in,
             }
@@ -157,8 +160,13 @@ pub fn parse_and_run(
                 };
                 final.*.code = hlp.determine_exit_code(final.*.err.?);
 
-                term.print_error("failed to run command: {?s} (error: {?})", .{ cmd.split[0], final.err });
+                term.print_error("failed to run command: {?s} ({t})", .{ cmd.split[0], final.err orelse unreachable });
                 std.posix.exit(1);
+            }
+            if (!cmd.opts.piped and cmd.opts.wait) {
+                const result = std.posix.waitpid(cmd.pid, 0);
+                if (result.status != 0) final.*.code = 1;
+                cmd.opts.wait = false;
             }
             continue;
         };
@@ -179,7 +187,7 @@ pub fn parse_and_run(
     };
 
     //wait for each command to finish
-    for (res.items) |cmd| if (!cmd.is_builtin) {
+    for (res.items) |cmd| if (!cmd.is_builtin and cmd.opts.wait) {
         const result = std.posix.waitpid(cmd.pid, 0);
         // TODO: figure out how to properly set this (all I get is 256 no matter the error and 0 for ok)
         if (result.status != 0) final.*.code = 1;

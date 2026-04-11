@@ -104,9 +104,13 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
 
     var string:u8 = 0;
     var i:usize = 0;
+    var was_piped:bool = false;
     loop: while (i < line.len) : (i += 1) {
         const b = line[i];
         if (!std.ascii.isWhitespace(b) and string == 0) for (globs.cmd_separators) |separator| if (b == separator) {
+            defer {
+                was_piped = b == '|';
+            }
             try res.append(alloc, .{
                 .raw = try mem.toOwnedSlice(alloc),
                 .fd_set = .{
@@ -115,6 +119,7 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
                 },
                 .opts = .{
                     .wait = true,
+                    .piped = b == '|' or was_piped,
                     .pipe_details = switch (separator) {
                         ';' => .{},
                         '|' => .{
@@ -143,6 +148,7 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
             },
             .opts = .{
                 .wait = true,
+                .piped = was_piped,
             },
         });
     }
