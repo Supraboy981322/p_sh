@@ -38,7 +38,25 @@ pub const Term = struct {
             std.debug.panic("\n" ++ msg ++ "\n", stuff); //flush...catch { ... }
         };
     }
-    
+
+    pub fn message(
+        self:*Term,
+        comptime msg:[]const u8,
+        stuff:anytype
+    ) void {
+        self.print("\np_sh: " ++ msg ++ "\n", stuff);
+    }
+
+    pub fn print(
+        self:*Term,
+        comptime msg:[]const u8,
+        stuff:anytype
+    ) void {
+        var stdout = @constCast(&self.stdout_file.writer(&.{})).interface;
+        stdout.print(msg, stuff) catch {};
+        stdout.flush() catch {};
+    }
+
     pub fn TODO(
         self:*Term,
         comptime msg:[]const u8,
