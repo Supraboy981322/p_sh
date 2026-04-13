@@ -49,3 +49,14 @@ pub fn determine_exit_code(e:anyerror) u8 {
         else => 1,
     };
 }
+
+pub fn to_regular_map(
+    in:[*:null]const ?[*:0]const u8,
+    alloc:std.mem.Allocator
+) ![]const []const u8 {
+    var out = try std.ArrayList([]const u8).initCapacity(alloc, 0);
+    defer _ = out.deinit(alloc);
+    for (std.mem.span(in)) |thing| if (thing) |t|
+        try out.append(alloc, std.mem.span(t));
+    return try out.toOwnedSlice(alloc);
+}
