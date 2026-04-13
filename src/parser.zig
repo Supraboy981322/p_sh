@@ -314,7 +314,7 @@ pub fn colorize(term:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
 
         try res.appendSlice(
             alloc,
-            if (hlp.contains(@constCast(&globs.symbols), b))
+            if (hlp.contains(&globs.symbols, b))
                 "\x1b[36m"
             else
                 "\x1b[00m"
