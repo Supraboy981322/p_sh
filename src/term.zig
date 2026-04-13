@@ -198,4 +198,11 @@ pub const Term = struct {
             }
         }
     }
+
+    pub fn is_alias(term:*Term, name:[]u8) bool {
+        return if (term.vars.aliases) |aliases|
+            aliases.get(name) != null
+        else
+            false;
+    }
 };

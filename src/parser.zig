@@ -296,7 +296,7 @@ pub fn colorize(term:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
     }
 
     const name = in[0 .. if (name_end > 0) name_end else in.len ];
-    const valid = try term.is_in_path(name);
+    const valid = try term.is_in_path(name) or term.is_alias(name);
     if (!valid) loop: for (res.items, 0..) |*c, k| {
         if (c.* == '\x1b') {
             res.items[k+2] = '3';
