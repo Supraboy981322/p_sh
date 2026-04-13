@@ -187,13 +187,14 @@ pub const Term = struct {
         const aliases = term.vars.aliases orelse return;
         for (res.items) |*cmd| {
             const split = try parser.split_args(cmd.raw, term);
-            const argv = try hlp.to_regular_map(split, term.alloc);
+            defer term.alloc.free(std.mem.span(split));
+            var argv = try hlp.to_regular_map(split, term.alloc);
+            defer term.alloc.free(argv);
+            _ = &argv;
             if (aliases.get(argv[0])) |alias| {
-                cmd.raw = try std.mem.concat(term.alloc, u8, &[_][]u8{
-                    alias,
-                    @constCast(" "),
-                    try std.mem.concat(term.alloc, u8, argv[1..]),
-                });
+                term.alloc.free(argv[0]);
+                @constCast(argv)[0] = alias;
+                cmd.raw = try std.mem.join(term.alloc, " ", argv);
             }
         }
     }
