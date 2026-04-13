@@ -53,6 +53,15 @@ pub const Cmd = struct {
                 alloc.free(std.mem.span(a));
     }
 
+    pub fn wants_file_direction(self:*Cmd, direction:PipeDetails.File.Direction) bool {
+        for ([_]bool{
+            self.opts.pipe_details.file.do,
+            self.opts.pipe_details.file.in_or_out == direction,
+        }) |check|
+            if (!check) return false;
+        return true;
+    }
+
     pub fn print(self:*Cmd) void {
         std.debug.print(
             \\Cmd = .{{
