@@ -1,9 +1,12 @@
 const std = @import("std");
 const hlp = @import("helpers.zig");
+const exec = @import("exec.zig");
 const globs = @import("globs.zig");
 
-const Cmd = @import("exec.zig").Cmd;
+const Cmd = exec.Cmd;
 const Term = @import("term.zig").Term;
+const ExecOpts = exec.ExecOpts;
+const PipeDetails = exec.PipeDetails;
 
 pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
     const alloc = term.alloc;
@@ -126,6 +129,22 @@ pub fn peekN_no_state(in:[]u8, i:usize, comptime n:usize) [n]u8 {
     return buf;
 }
 
+pub fn seek_thing_no_state(in:[]u8, pos:*usize) []u8 {
+    var i = pos.*;
+    defer pos.* = i;
+    var start:?usize = null;
+    var n:usize = 0;
+    loop: while (i < in.len) : (i += 1) {
+        defer n += 1;
+        if (std.ascii.isWhitespace(in[i])) if (start == null) {
+            i += 1;
+            start = i;
+        } else
+            break :loop;
+    }
+    return in[start orelse 0..i];
+}
+
 pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
 
     const alloc = term.alloc;
@@ -135,10 +154,12 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
     var string:u8 = 0;
     var i:usize = 0;
     var was_piped:bool = false;
+    var file:?PipeDetails.File = null;
     loop: while (i < line.len) : (i += 1) {
         const b = line[i];
         if (string == 0 and std.mem.containsAtLeast(u8, &globs.cmd_separators, 1, &[_]u8{b})) {
             defer {
+                file = null;
                 was_piped = b == '|';
             }
             try res.append(alloc, .{
@@ -150,15 +171,26 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
                 .opts = .{
                     .wait = true,
                     .piped = b == '|' or was_piped,
+                    // TODO: probably a better way to do this
                     .pipe_details = switch (b) {
                         ';' => .{},
-                        '|' => .{
-                            .out = true,
-                        },
+                        '|' => .{ .out = true, },
                         else => std.debug.panic("TODO: cmd separator |{c}|", .{b}), 
                     }
                 },
             });
+            res.items[res.items.len - 1].opts.pipe_details.file = file orelse .{};
+            continue :loop;
+        }
+
+        if (b == '>' or b == '<' and string == 0) {
+            file = .{
+                .do = true,
+                .append = peek_no_state(line, &i) == b,
+                .in_or_out = if (b == '<') .IN else .OUT,
+            };
+            file.?.name = seek_thing_no_state(line, &i);
+
             continue :loop;
         }
 
@@ -181,6 +213,7 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
                 .piped = was_piped,
             },
         });
+        res.items[res.items.len - 1].opts.pipe_details.file = file orelse .{};
     }
 }
 
