@@ -29,7 +29,11 @@ pub const PipeDetails = struct {
         do:bool = false,
         name:[]u8 = undefined,
         append:bool = false,
-        in_or_out:enum{ IN, OUT } = undefined,
+        in_or_out:Direction = undefined,
+        pub const Direction = enum {
+            IN,
+            OUT,
+        };
     };
 };
 
