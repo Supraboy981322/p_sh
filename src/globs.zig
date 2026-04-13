@@ -18,6 +18,11 @@ pub var separators = [_]u8{
 //I hate that I have to do this
 pub var non_const_separators:[]u8 = @constCast(&thing_separators);
 
+pub var symbols = [_]u8 {
+    '&',
+    '>', '<'
+} ++ cmd_separators;
+
 pub const thing_separators = [_]u8 {
 } ++  std.ascii.whitespace
   ++ cmd_separators;
