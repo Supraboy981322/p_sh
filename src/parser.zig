@@ -129,18 +129,21 @@ pub fn peekN_no_state(in:[]u8, i:usize, comptime n:usize) [n]u8 {
     return buf;
 }
 
-pub fn seek_thing_no_state(in:[]u8, pos:*usize) []u8 {
+pub fn seek_thing_no_state(in:[]u8, pos:*usize, from:?u8) []u8 {
     var i = pos.*;
     defer pos.* = i;
     var start:?usize = null;
     var n:usize = 0;
     loop: while (i < in.len) : (i += 1) {
         defer n += 1;
-        if (std.ascii.isWhitespace(in[i])) if (start == null) {
+        const is_from = if (from) |f| in[i] == f else false;
+        if (std.ascii.isWhitespace(in[i]) or !is_from and start == null) {
             i += 1;
             start = i;
         } else
-            break :loop;
+            if (std.ascii.isWhitespace(in[i]) and !is_from)
+                if (start != null)
+                    break :loop;
     }
     return in[start orelse 0..i];
 }
@@ -183,13 +186,15 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
             continue :loop;
         }
 
-        if (b == '>' or b == '<' and string == 0) {
+        if ((b == '>' or b == '<') and string == 0) {
             file = .{
                 .do = true,
                 .append = peek_no_state(line, &i) == b,
                 .in_or_out = if (b == '<') .IN else .OUT,
             };
-            file.?.name = seek_thing_no_state(line, &i);
+            const old_pos = i;
+            file.?.name = seek_thing_no_state(line, &i, b);
+            if (i == old_pos) return error.IncompletePipe;
 
             continue :loop;
         }
