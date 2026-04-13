@@ -15,13 +15,22 @@ const IoOpt = struct {
     is_pipe:bool = false,
 };
 
-const ExecOpts = struct {
+pub const ExecOpts = struct {
     wait:bool,
     piped:bool,
-    pipe_details:struct {
-        out:bool = false,
-        in:bool = false,
-    } = .{},
+    pipe_details:PipeDetails = .{},
+};
+
+pub const PipeDetails = struct {
+    out:bool = false,
+    in:bool = false,
+    file:File = .{},
+    pub const File = struct {
+        do:bool = false,
+        name:[]u8 = undefined,
+        append:bool = false,
+        in_or_out:enum{ IN, OUT } = undefined,
+    };
 };
 
 pub const Cmd = struct {
