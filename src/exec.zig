@@ -120,7 +120,8 @@ pub fn parse_and_run(
     
     //start each command
     for (res.items, 0..) |*cmd, i| {
-        // TODO: should I just move this out of the loop, will it ever change between spawning processes?
+        // TODO: should I just move this out of the loop,
+        //  will it ever change between spawning processes?
         cmd.envp = try std.process.createEnvironFromMap(alloc, &term.env, .{});
 
         _ = cmd.split[0] orelse {
@@ -128,7 +129,9 @@ pub fn parse_and_run(
             return final;
         };
 
-        const matched_builtin = std.meta.stringToEnum(Builtins, std.mem.span(cmd.split[0].?)) orelse {
+        const matched_builtin = std.meta.stringToEnum(
+            Builtins, std.mem.span(cmd.split[0].?)
+        ) orelse {
             cmd.pid = try std.posix.fork();
             if (cmd.pid == 0) {
 
