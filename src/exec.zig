@@ -104,24 +104,23 @@ pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
         defer i += 1;
         cmd.split = try parser.split_args(cmd.raw, term);
 
-        if (cmd.opts.pipe_details.file.do) {
-            const name = cmd.opts.pipe_details.file.name;
+        const pipe_details = cmd.opts.pipe_details;
+        if (pipe_details.file.do) {
+            const name = pipe_details.file.name;
+            const pipein = pipe_details.file.in_or_out == .IN;
+            if (pipein) cmd.opts.pipe_details.in = true;
             var file = try term.cwd().createFile(name, .{
-                .truncate = !cmd.opts.pipe_details.file.append,
-                .read = cmd.opts.pipe_details.file.in_or_out == .IN,
+                .truncate = !pipe_details.file.append and !pipein,
+                .read = pipein,
             });
-            if (cmd.opts.pipe_details.file.append) 
+            if (pipe_details.file.append)
                 try file.seekFromEnd(0);
-            const in_fd = switch (cmd.opts.pipe_details.file.in_or_out) {
-                .IN => file.handle,
-                .OUT => term.stdout_file.handle,
-            };
-            const out_fd = switch (cmd.opts.pipe_details.file.in_or_out) {
-                .IN => term.stdout_file.handle,
-                .OUT => file.handle,
+            const in_fd, const out_fd = switch (pipe_details.file.in_or_out) {
+                .IN => .{ file.handle, term.stdout_file.handle },
+                .OUT => .{ term.stdin_file.handle, file.handle },
             };
             cmd.fd_set = [2]std.posix.fd_t{ in_fd, out_fd };
-        } else if (cmd.opts.pipe_details.out) if (res.items.len > i+1) {
+        } else if (pipe_details.out) if (res.items.len > i+1) {
             cmd.fd_set = try std.posix.pipe();
             res.items[i+1].opts.pipe_details.in = true;
         } else {
@@ -176,7 +175,7 @@ pub fn parse_and_run(
 
                 //stdin
                 try std.posix.dup2(
-                    if (cmd.opts.pipe_details.in)
+                    if (cmd.opts.pipe_details.in and !@constCast(cmd).wants_file_direction(.IN))
                         (&res.items[i - 1]).fd_set[0]
                     else
                         cmd.fd_set[0],
