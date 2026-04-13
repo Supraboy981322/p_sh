@@ -137,7 +137,7 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
     var was_piped:bool = false;
     loop: while (i < line.len) : (i += 1) {
         const b = line[i];
-        if (!std.ascii.isWhitespace(b) and string == 0) for (globs.cmd_separators) |separator| if (b == separator) {
+        if (string == 0 and std.mem.containsAtLeast(u8, &globs.cmd_separators, 1, &[_]u8{b})) {
             defer {
                 was_piped = b == '|';
             }
@@ -150,17 +150,17 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
                 .opts = .{
                     .wait = true,
                     .piped = b == '|' or was_piped,
-                    .pipe_details = switch (separator) {
+                    .pipe_details = switch (b) {
                         ';' => .{},
                         '|' => .{
                             .out = true,
                         },
-                        else => std.debug.panic("TODO: cmd separator |{c}|", .{separator}), 
+                        else => std.debug.panic("TODO: cmd separator |{c}|", .{b}), 
                     }
                 },
             });
             continue :loop;
-        };
+        }
 
         if ((b == '"' or b == '\'') and string == 0)
             string = b
