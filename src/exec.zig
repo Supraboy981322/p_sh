@@ -91,7 +91,24 @@ pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
         defer i += 1;
         cmd.split = try parser.split_args(cmd.raw, term);
 
-        if (cmd.opts.pipe_details.out) if (res.items.len > i+1) {
+        if (cmd.opts.pipe_details.file.do) {
+            const name = cmd.opts.pipe_details.file.name;
+            var file = try term.cwd().createFile(name, .{
+                .truncate = !cmd.opts.pipe_details.file.append,
+                .read = cmd.opts.pipe_details.file.in_or_out == .IN,
+            });
+            if (cmd.opts.pipe_details.file.append) 
+                try file.seekFromEnd(0);
+            const in_fd = switch (cmd.opts.pipe_details.file.in_or_out) {
+                .IN => file.handle,
+                .OUT => term.stdout_file.handle,
+            };
+            const out_fd = switch (cmd.opts.pipe_details.file.in_or_out) {
+                .IN => term.stdout_file.handle,
+                .OUT => file.handle,
+            };
+            cmd.fd_set = [2]std.posix.fd_t{ in_fd, out_fd };
+        } else if (cmd.opts.pipe_details.out) if (res.items.len > i+1) {
             cmd.fd_set = try std.posix.pipe();
             res.items[i+1].opts.pipe_details.in = true;
         } else {
@@ -173,7 +190,10 @@ pub fn parse_and_run(
                 };
                 final.code = hlp.determine_exit_code(final.err.?);
 
-                term.print_error("failed to run command: {?s} ({t})", .{ cmd.split[0], final.err orelse unreachable });
+                term.print_error(
+                    "failed to run command: {?s} ({t})",
+                    .{ cmd.split[0], final.err orelse unreachable }
+                );
                 std.posix.exit(1);
             }
             if (!cmd.opts.piped and cmd.opts.wait) {
