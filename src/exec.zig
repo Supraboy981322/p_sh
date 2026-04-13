@@ -105,6 +105,7 @@ pub fn parse_and_run(
     }
 
     try parser.split_command(term, &res, line);
+    try term.replace_aliases(&res);
 
     var final:ExecResult = ExecResult{
         .quit = false,

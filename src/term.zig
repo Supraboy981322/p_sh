@@ -5,6 +5,7 @@ const globs = @import("globs.zig");
 const hlp = @import("helpers.zig");
 
 const Hist = globs.Hist;
+const Cmd = exec.Cmd;
 
 pub const Term = struct {
     og:std.os.linux.termios,
@@ -180,5 +181,18 @@ pub const Term = struct {
 
     pub fn read_config(term:*Term) !void {
         try @import("config.zig").read(term);
+    }
+
+    pub fn replace_aliases(term:*Term, res:*std.ArrayList(Cmd)) !void {
+        const aliases = term.vars.aliases orelse return;
+        for (res.items) |*cmd| if (aliases.get(cmd.raw)) |alias| {
+            const split = try parser.split_args(cmd.raw, term);
+            const argv = try hlp.to_regular_map(split, term.alloc);
+            cmd.raw = try std.mem.concat(term.alloc, u8, &[_][]u8{
+                alias,
+                @constCast(" "),
+                try std.mem.concat(term.alloc, u8, argv[1..]),
+            });
+        };
     }
 };
