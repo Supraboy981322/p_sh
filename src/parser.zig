@@ -256,7 +256,8 @@ pub fn colorize(term:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
         switch (b) {
 
             '#' => if (string == 0) {
-                try res.appendSlice(alloc, "\x1b[0;3;38;2;115;115;150m");
+                if (term.config.colorizing_level >= 2)
+                    try res.appendSlice(alloc, "\x1b[0;3;38;2;115;115;150m");
                 for (in[j..]) |c| try res.append(alloc, c);
                 break;
             },
@@ -273,7 +274,8 @@ pub fn colorize(term:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
                 else if (string != b)
                     string
                 else {
-                    try res.appendSlice(alloc, "\x1b[33m"); 
+                    if (term.config.colorizing_level >= 2)
+                        try res.appendSlice(alloc, "\x1b[33m"); 
                     try res.append(alloc, b);
                     string = 0;
                     continue;
@@ -286,66 +288,72 @@ pub fn colorize(term:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
             },
 
             '\\' => {
-                try res.appendSlice(alloc, "\x1b[34m");
-                colorize_next = if (in.len > i+1) switch (in[@intCast(i+1)]) {
+                if (term.config.colorizing_level >= 2) {
+                    try res.appendSlice(alloc, "\x1b[34m");
+                    colorize_next = if (in.len > i+1) switch (in[@intCast(i+1)]) {
 
-                    '0'...'3' => for ([_]bool{
-                        peek(in, &j) >= '0',
-                        peek(in, &j) <= '7',
-                        peek(in, &next) >= '0',
-                        peek(in, &next) <= '7',
-                        peek(in, @constCast(&@as(usize, next+1))) >= '0',
-                        peek(in, @constCast(&@as(usize, next+1))) <= '7',
-                    }) |check| {
-                        if (!check) break 1;
-                    } else 4,
-
-                    'x' => for (peekN(in, j+1, 3)) |c| {
-                        break for ([_]bool{
-                            c >= '0' and c <= '9',
-                            c >= 'a' and c <= 'f',
-                            c >= 'A' and c <= 'F',
+                        '0'...'3' => for ([_]bool{
+                            peek(in, &j) >= '0',
+                            peek(in, &j) <= '7',
+                            peek(in, &next) >= '0',
+                            peek(in, &next) <= '7',
+                            peek(in, @constCast(&@as(usize, next+1))) >= '0',
+                            peek(in, @constCast(&@as(usize, next+1))) <= '7',
                         }) |check| {
-                            if (check) break @as(u8, 4);
-                        } else @as(u8, 1);
-                    } else @as(u8, 1),
+                            if (!check) break 1;
+                        } else 4,
 
-                    '#' => {
-                        try res.appendSlice(alloc, "\\#");
-                        i += 1;
-                        continue;
-                    },
+                        'x' => for (peekN(in, j+1, 3)) |c| {
+                            break for ([_]bool{
+                                c >= '0' and c <= '9',
+                                c >= 'a' and c <= 'f',
+                                c >= 'A' and c <= 'F',
+                            }) |check| {
+                                if (check) break @as(u8, 4);
+                            } else @as(u8, 1);
+                        } else @as(u8, 1),
 
-                    else => 1,
-                } else 1;
+                        '#' => {
+                            try res.appendSlice(alloc, "\\#");
+                            i += 1;
+                            continue;
+                        },
+
+                        else => 1,
+                    } else 1;
+                }
             },
             else => {},
         }
 
-        try res.appendSlice(
-            alloc,
-            if (hlp.contains(&globs.symbols, b))
-                "\x1b[36m"
-            else
-                "\x1b[00m"
-        );
+        if (term.config.colorizing_level >= 2) {
+            try res.appendSlice(
+                alloc,
+                if (hlp.contains(&globs.symbols, b))
+                    "\x1b[36m"
+                else
+                    "\x1b[00m"
+            );
 
-        if (string != 0)
-            try res.appendSlice(alloc, "\x1b[33m")
-        else if (std.ascii.isDigit(b))
-            try res.appendSlice(alloc, "\x1b[34m")
-        else if (colorize_next > 0) {
-            try res.appendSlice(alloc, "\x1b[34m");
-            colorize_next -= 1;
+            if (string != 0)
+                try res.appendSlice(alloc, "\x1b[33m")
+            else if (std.ascii.isDigit(b))
+                try res.appendSlice(alloc, "\x1b[34m")
+            else if (colorize_next > 0) {
+                try res.appendSlice(alloc, "\x1b[34m");
+                colorize_next -= 1;
+            }
         }
 
         try res.append(alloc, b);
-        try res.appendSlice(alloc, "\x1b[0m");
+        if (term.config.colorizing_level >= 1) {
+            try res.appendSlice(alloc, "\x1b[0m");
+        }
     }
 
     const name = in[0 .. if (name_end > 0) name_end else in.len ];
     const valid = try term.is_in_path(name) or term.is_alias(name);
-    if (!valid) loop: for (res.items, 0..) |*c, k| {
+    if (!valid and term.config.colorizing_level >= 1) loop: for (res.items, 0..) |*c, k| {
         if (c.* == '\x1b') {
             res.items[k+2] = '3';
             res.items[k+3] = '1';
