@@ -82,7 +82,7 @@ pub fn read(term:*Term) !void {
                 else
                     try key.append(alloc, b);
             },
-            '(' => {
+            '[' => {
                 const key_name = try key.toOwnedSlice(alloc);
                 category = std.meta.stringToEnum(Category, key_name) orelse {
                     std.debug.panic("invalid category: {s}\n", .{key_name});
@@ -92,9 +92,9 @@ pub fn read(term:*Term) !void {
                 value.clearAndFree(alloc);
                 continue :loop;
             },
-            ')' => {
+            ']' => {
                 if (category == null) 
-                    std.debug.panic("unexpected closing brace", .{});
+                    std.debug.panic("unexpected closing bracket", .{});
                 category = null;
                 continue :loop;
             },
