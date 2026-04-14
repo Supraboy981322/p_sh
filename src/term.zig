@@ -41,7 +41,6 @@ pub const Term = struct {
         };
 
         pub fn set(self:*Config, term:*Term, key:[]u8, value:[]u8) void {
-            _ = .{ self, key, value };
             const name = std.meta.stringToEnum(ValidOpts, key) orelse {
                 term.print_error("invalid config option: {s}", .{key});
                 return;

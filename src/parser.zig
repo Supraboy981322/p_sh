@@ -343,6 +343,8 @@ pub fn colorize(term:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
                 try res.appendSlice(alloc, "\x1b[34m");
                 colorize_next -= 1;
             }
+        } else if (term.config.colorizing_level >= 1) {
+            try res.appendSlice(alloc, "\x1b[00m");
         }
 
         try res.append(alloc, b);
