@@ -39,12 +39,18 @@ pub const PipeDetails = struct {
 
 pub const Cmd = struct {
     raw:[]u8,
+    args_info:[]ArgInfo,
     split:[*:null]const ?[*:0]const u8 = undefined,
     fd_set:[2]std.posix.fd_t,
     pid:std.posix.pid_t = undefined,
     opts:ExecOpts = .{ .wait = true, .piped = false },
     envp:[*:null]const ?[*:0]const u8 = undefined, // TODO: determine if I should free this
     is_builtin:bool = false,
+
+    pub const ArgInfo = struct {
+        raw:?[*:0]const u8,
+        quote_type:u8 = 0,
+    };
     
     pub fn free(self:*Cmd, alloc:std.mem.Allocator) void {
         alloc.free(self.raw);

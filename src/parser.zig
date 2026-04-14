@@ -8,6 +8,14 @@ const Term = @import("term.zig").Term;
 const ExecOpts = exec.ExecOpts;
 const PipeDetails = exec.PipeDetails;
 
+pub const ArgSplitResult = struct {
+    //elderly C-style (may add a more convenient one here too)
+    archaic:[*:null]const ?[*:0]const u8,
+
+    //information about each arg, in order
+    info:[]exec.Cmd.ArgInfo,
+};
+
 pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
     const alloc = term.alloc;
     var res = try std.ArrayList(?[*:0]const u8).initCapacity(alloc, 0);
@@ -167,6 +175,7 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
             }
             try res.append(alloc, .{
                 .raw = try mem.toOwnedSlice(alloc),
+                .args_info = undefined,
                 .fd_set = .{
                     term.stdin_file.handle,
                     term.stdout_file.handle,
@@ -209,6 +218,7 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
     if (mem.items.len > 0) {
         try res.append(alloc, .{
             .raw = try mem.toOwnedSlice(alloc),
+            .args_info = undefined,
             .fd_set = .{
                 term.stdin_file.handle,
                 term.stdout_file.handle
