@@ -54,7 +54,7 @@ pub const Term = struct {
                             false;
                     if (!is_valid) {
                         term.print_error(
-                            "invalid config value({s}): |{s}|,"
+                            "invalid config value (\"{s}\"): |{s}|, "
                                 ++ "expected a number from 0-2",
                         .{key, value});
                         return;
