@@ -21,6 +21,8 @@ pub const Term = struct {
     permanent_alloc:std.mem.Allocator,
     hist:*Hist,
 
+    previous_wd:[]u8,
+
     vars:struct {
         aliases:?std.StringHashMap([]u8) = null,
     } = .{},
@@ -90,7 +92,9 @@ pub const Term = struct {
             .env = if (env) |e| e else try std.process.getEnvMap(alloc),
             .permanent_alloc = alloc,
             .hist = hist,
+            .previous_wd = undefined,
         };
+        res.previous_wd = try res.permanent_alloc.alloc(u8, 0);
         try res.cd(@constCast("."));
         res.read_config() catch |e|
             if (e == error.FileNotFound)
@@ -104,6 +108,8 @@ pub const Term = struct {
     }
 
     pub fn cd(self:*Term, path:[]u8) !void {
+        self.permanent_alloc.free(self.previous_wd);
+        self.previous_wd = try self.cwd_path(self.permanent_alloc);
         const dir = self.cwd().realpathAlloc(self.alloc, path) catch |e| {
             self.print_error("{t}", .{e});
             return;
@@ -123,6 +129,10 @@ pub const Term = struct {
         return std.fs.cwd();
     }
 
+    pub fn cwd_path(self:*Term, alloc:std.mem.Allocator) ![]u8 {
+        return try self.cwd().realpathAlloc(alloc, ".");
+    }
+
     pub fn deinit(self:*Term) void {
         _ = self.env.deinit();
         if (self.vars.aliases) |*const_aliases| {
@@ -134,6 +144,7 @@ pub const Term = struct {
             }
             aliases.deinit();
         }
+        self.permanent_alloc.free(self.previous_wd);
     }
 
     pub fn revert(self:*Term) !void {
