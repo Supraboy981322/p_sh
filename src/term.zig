@@ -27,6 +27,19 @@ pub const Term = struct {
         aliases:?std.StringHashMap([]u8) = null,
     } = .{},
 
+    config:Config,
+
+    pub const Config = struct {
+        //level of colorizing in interactive
+        //  0 = none (at all)
+        //  1 = only invalid command names
+        //  2 = 1 + command args
+        colorizing_level:u2 = 2,
+
+        pub fn set(self:*Config, key:[]u8, value:[]u8) void {
+            _ = .{ self, key, value };
+        }
+    };
 
     pub fn print_error(
         self:*Term,
@@ -93,6 +106,7 @@ pub const Term = struct {
             .permanent_alloc = alloc,
             .hist = hist,
             .previous_wd = undefined,
+            .config = .{},
         };
         res.previous_wd = try res.permanent_alloc.alloc(u8, 0);
         try res.cd(@constCast("."));

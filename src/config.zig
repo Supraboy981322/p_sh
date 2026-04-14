@@ -2,7 +2,7 @@ const std = @import("std");
 const Term = @import("term.zig").Term;
 
 pub fn read(term:*Term) !void {
-    const Category = enum{ aliases };
+    const Category = enum{ aliases, general };
 
     const home_dir = term.env.get("HOME") orelse return;
     const config_path = b: {
@@ -27,6 +27,7 @@ pub fn read(term:*Term) !void {
     defer key.deinit(alloc);
 
     var aliases = std.StringHashMap([]u8).init(alloc);
+    var general = term.config;
 
     var string:u8 = 0;
     var esc:bool = false;
