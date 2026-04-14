@@ -159,6 +159,9 @@ pub fn main() !void {
                     \\  error{{{?t}}} code{{{d}}} quit{{{}}}
                     , .{ info.err, info.code, info.quit }
                 );
+                if (info.err) |err| {
+                    term.print_error("error: {t}", .{err});
+                }
                 quit = info.quit;
                 break :b info.code;
             };
