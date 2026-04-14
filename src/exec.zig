@@ -108,11 +108,15 @@ pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
         if (pipe_details.file.do) {
             const name = pipe_details.file.name;
             const pipein = pipe_details.file.in_or_out == .IN;
-            if (pipein) cmd.opts.pipe_details.in = true;
-            var file = try term.cwd().createFile(name, .{
-                .truncate = !pipe_details.file.append and !pipein,
-                .read = pipein,
-            });
+            var file =
+                if (!pipein)
+                    try term.cwd().createFile(name, .{
+                        .truncate = !pipe_details.file.append and !pipein,
+                        .read = pipein,
+                }) else b: {
+                    cmd.opts.pipe_details.in = true;
+                    break :b try term.cwd().openFile(name, .{});
+                };
             if (pipe_details.file.append)
                 try file.seekFromEnd(0);
             const in_fd, const out_fd = switch (pipe_details.file.in_or_out) {
