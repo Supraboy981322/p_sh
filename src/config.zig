@@ -36,15 +36,24 @@ pub fn read(term:*Term) !void {
 
     loop: while (reader.takeByte() catch null) |b| {
         if (std.ascii.isWhitespace(b) and string == 0 and !esc) {
-            if (value.items.len > 0) {
-                try aliases.put(
-                    try key.toOwnedSlice(alloc),
-                    try value.toOwnedSlice(alloc)
-                );
-                key.clearAndFree(alloc);
-                value.clearAndFree(alloc);
-                key_or_value = .KEY;
-            }
+            if (value.items.len > 0) if (category) |cat| switch (cat) {
+                .aliases => {
+                    try aliases.put(
+                        try key.toOwnedSlice(alloc),
+                        try value.toOwnedSlice(alloc)
+                    );
+                    key.clearAndFree(alloc);
+                    value.clearAndFree(alloc);
+                    key_or_value = .KEY;
+                },
+                .general => {
+                    general.set(key.items, value.items);
+                    key.clearAndFree(alloc);
+                    value.clearAndFree(alloc);
+                    key_or_value = .KEY;
+                },
+            } else
+                term.print_error("unexpected bytes in config: {s}", .{value.items});
             continue :loop;
         }
 
