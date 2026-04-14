@@ -36,7 +36,15 @@ pub fn cd(term:*Term, argv:[][]const u8) !void {
         term.print_error("not enough args; need a directory", .{});
         return error.NotEnoughArgs;
     }
-    try term.cd(@constCast(argv[1]));
+    const dir =
+        if (std.mem.eql(u8, argv[1], "-")) b: {
+            const current = try term.cwd_path(term.alloc);
+            defer term.alloc.free(current);
+            term.print("{s}\n", .{current});
+            break :b try term.alloc.dupe(u8, term.previous_wd);
+        } else
+            @constCast(argv[1]);
+    try term.cd(dir);
 }
 
 pub fn history(term:*Term, argv:[][]const u8) !void {
