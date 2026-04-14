@@ -11,6 +11,7 @@ pub const Valid = enum {
     @":",
     eval,
     set,
+    alias,
 };
 
 pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
@@ -31,6 +32,7 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
         .@":" => no_op(term, argv.items),
         .eval => eval(term, argv.items),
         .set => set_opt(term, argv.items),
+        .alias => alias(term, argv.items),
 
         // NOTE: this should never be touched, 'exit' is handled much earlier
         //  TODO: change this (for scripting)
@@ -82,4 +84,15 @@ pub fn set_opt(term:*Term, argv:[][]const u8) !void {
         else
             error.TooManyArgs;
     term.config.set(term, @constCast(argv[1]), @constCast(argv[2]));
+}
+
+pub fn alias(term:*Term, argv:[][]const u8) !void {
+    if (argv.len < 3)
+        return error.NotEnoughArgs;
+    const alloc = term.permanent_alloc;
+    const name = try alloc.dupe(u8, argv[1]);
+    const value = try alloc.dupe(u8, argv[2]);
+    if (term.vars.aliases == null) 
+        term.vars.aliases = std.StringHashMap([]u8).init(alloc);
+    try term.vars.aliases.?.put(name, value);
 }
