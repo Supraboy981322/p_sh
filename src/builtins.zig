@@ -27,11 +27,13 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
     (switch (name) {
         .cd => cd(term, argv.items),
         .history => history(term, argv.items),
+        .@":" => no_op(term, argv.items),
+        .eval => eval(term, argv.items),
+
         // NOTE: this should never be touched, 'exit' is handled much earlier
         //  TODO: change this (for scripting)
         .exit => unreachable,
-        .@":" => no_op(term, argv.items),
-        .eval => eval(term, argv.items),
+
     }) catch |e| switch (e) {
         else => return e, // TODO: probably want to do something here
     };
