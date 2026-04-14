@@ -10,6 +10,7 @@ pub const Valid = enum {
     cd,
     @":",
     eval,
+    set,
 };
 
 pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
@@ -29,6 +30,7 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
         .history => history(term, argv.items),
         .@":" => no_op(term, argv.items),
         .eval => eval(term, argv.items),
+        .set => set_opt(term, argv.items),
 
         // NOTE: this should never be touched, 'exit' is handled much earlier
         //  TODO: change this (for scripting)
@@ -71,4 +73,13 @@ pub fn eval(term:*Term, argv:[][]const u8) anyerror!void {
     const joined = try std.mem.join(term.alloc, " ", @constCast(argv[1..]));
     defer term.alloc.free(joined);
     _ = try exec.parse_and_run(joined, term);
+}
+
+pub fn set_opt(term:*Term, argv:[][]const u8) !void {
+    if (argv.len != 3)
+        return if (argv.len < 3)
+            error.NotEnoughArgs
+        else
+            error.TooManyArgs;
+    term.config.set(term, @constCast(argv[1]), @constCast(argv[2]));
 }
