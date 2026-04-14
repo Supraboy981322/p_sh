@@ -8,6 +8,8 @@ pub const Valid = enum {
     history,
     exit,
     cd,
+    @":",
+    eval,
 };
 
 pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
@@ -25,7 +27,11 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
     (switch (name) {
         .cd => cd(term, argv.items),
         .history => history(term, argv.items),
-        .exit => {},// TODO: handle this
+        // NOTE: this should never be touched, 'exit' is handled much earlier
+        //  TODO: change this (for scripting)
+        .exit => unreachable,
+        .@":" => no_op(term, argv.items),
+        .eval => eval(term, argv.items),
     }) catch |e| switch (e) {
         else => return e, // TODO: probably want to do something here
     };
@@ -52,4 +58,15 @@ pub fn history(term:*Term, argv:[][]const u8) !void {
         term.TODO("history command args", .{});
     for (term.hist.arr[0..term.hist.len], 0..) |line, i|
         term.print("{d}: {s}\n", .{i, line});
+}
+
+pub fn no_op(term:*Term, argv:[][]const u8) !void {
+     _ = .{ term, argv };
+    return;
+}
+
+pub fn eval(term:*Term, argv:[][]const u8) anyerror!void {
+    const joined = try std.mem.join(term.alloc, " ", @constCast(argv[1..]));
+    defer term.alloc.free(joined);
+    _ = try exec.parse_and_run(joined, term);
 }
