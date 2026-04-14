@@ -27,7 +27,6 @@ pub fn read(term:*Term) !void {
     defer key.deinit(alloc);
 
     var aliases = std.StringHashMap([]u8).init(alloc);
-    var general = term.config;
 
     var string:u8 = 0;
     var esc:bool = false;
@@ -47,7 +46,7 @@ pub fn read(term:*Term) !void {
                     key_or_value = .KEY;
                 },
                 .general => {
-                    general.set(key.items, value.items);
+                    term.config.set(term, key.items, value.items);
                     key.clearAndFree(alloc);
                     value.clearAndFree(alloc);
                     key_or_value = .KEY;
