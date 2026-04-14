@@ -36,8 +36,33 @@ pub const Term = struct {
         //  2 = 1 + command args
         colorizing_level:u2 = 2,
 
-        pub fn set(self:*Config, key:[]u8, value:[]u8) void {
+        const ValidOpts = enum {
+            @"colorizing_level"
+        };
+
+        pub fn set(self:*Config, term:*Term, key:[]u8, value:[]u8) void {
             _ = .{ self, key, value };
+            const name = std.meta.stringToEnum(ValidOpts, key) orelse {
+                term.print_error("invalid config option: {s}", .{key});
+                return;
+            };
+            switch (name) {
+                .colorizing_level => {
+                    const is_valid =
+                        if (value.len == 1)
+                            value[0] >= '0' and value[0] <= '2'
+                        else
+                            false;
+                    if (!is_valid) {
+                        term.print_error(
+                            "invalid config value({s}): |{s}|,"
+                                ++ "expected a number from 0-2",
+                        .{key, value});
+                        return;
+                    }
+                    self.colorizing_level = @intCast(value[0] - '0');
+                },
+            }
         }
     };
 
