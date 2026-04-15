@@ -244,6 +244,9 @@ pub const Term = struct {
                 term.alloc.free(argv[0]);
                 @constCast(argv)[0] = alias;
                 cmd.raw = try std.mem.join(term.alloc, " ", argv);
+            } else {
+                for (argv) |arg|
+                    term.alloc.free(arg);
             }
         }
     }

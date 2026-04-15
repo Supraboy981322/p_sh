@@ -133,7 +133,8 @@ pub fn peek_no_state(in:[]u8, i:*usize) u8 {
 
 pub fn peekN_no_state(in:[]u8, i:usize, comptime n:usize) [n]u8 {
     var buf:[n]u8 = undefined;
-    for (0..n) |j| buf[j] = peek_no_state(in, @constCast(&(i + j)));
+    for (0..n) |j|
+        buf[j] = peek_no_state(in, @constCast(&(i + j)));
     return buf;
 }
 
@@ -196,14 +197,23 @@ pub fn split_command(term:*Term, res:*std.ArrayList(Cmd), line:[]u8) !void {
         }
 
         if ((b == '>' or b == '<') and string == 0) {
+            const old_pos = i;
             file = .{
                 .do = true,
-                .append = peek_no_state(line, &i) == b,
+                .append = peek_no_state(line, &i) == b and b == '>',
+                .tmp_file =
+                    if (std.mem.eql(u8, &peekN_no_state(line, i, 2), "<<")) blk: {
+                        i += 2;
+                        const content = seek_thing_no_state(line, &i, b);
+                        if (i-2 == old_pos)
+                            return error.IncompletePipe;
+                        break :blk content;
+                    } else
+                        null,
                 .in_or_out = if (b == '<') .IN else .OUT,
             };
-            const old_pos = i;
-            file.?.name = seek_thing_no_state(line, &i, b);
-            if (i == old_pos) return error.IncompletePipe;
+            if (file.?.tmp_file == null)
+                file.?.name = seek_thing_no_state(line, &i, b);
 
             continue :loop;
         }
