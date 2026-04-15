@@ -142,15 +142,12 @@ pub fn seek_thing_no_state(in:[]u8, pos:*usize, from:?u8) []u8 {
     var i = pos.*;
     defer pos.* = i;
     var start:?usize = null;
-    var n:usize = 0;
     loop: while (i < in.len) : (i += 1) {
-        defer n += 1;
-        const is_from = if (from) |f| in[i] == f else false;
-        if (std.ascii.isWhitespace(in[i]) or !is_from and start == null) {
+        if ((std.ascii.isWhitespace(in[i]) or in[i] != from.?) and start == null) {
             i += 1;
             start = i;
         } else
-            if (std.ascii.isWhitespace(in[i]) and !is_from)
+            if (std.ascii.isWhitespace(in[i]) and in[i] != from.?)
                 if (start != null)
                     break :loop;
     }
