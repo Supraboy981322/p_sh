@@ -136,7 +136,7 @@ pub fn dump(term:*Term, argv:[][]const u8) !void {
         },
         .aliases => {
             if (term.vars.aliases == null) {
-                term.print("you have no aliases", .{});
+                term.print("you have no aliases\n", .{});
                 return;
             }
             var itr = term.vars.aliases.?.iterator();
