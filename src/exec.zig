@@ -235,14 +235,15 @@ pub fn parse_and_run(
 
     //close file descriptors (they're duped in forked processes)
      for (res.items) |*cmd| if (cmd.opts.pipe_details.out) {
-         std.posix.close(cmd.fd_set[0]);
-         std.posix.close(cmd.fd_set[1]);
+        std.posix.close(cmd.fd_set[0]);
+        std.posix.close(cmd.fd_set[1]);
      };
 
     //wait for each command to finish
     for (res.items) |cmd| if (!cmd.is_builtin and cmd.opts.wait) {
         const result = std.posix.waitpid(cmd.pid, 0);
-        // TODO: figure out how to properly set this (all I get is 256 no matter the error and 0 for ok)
+        // TODO: figure out how to properly set this
+        //  (on error, all I get is 256 (regardless of the error))
         if (result.status != 0) final.code = 1;
     };
 
