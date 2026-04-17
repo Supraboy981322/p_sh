@@ -69,35 +69,6 @@ pub const Cmd = struct {
             if (!check) return false;
         return true;
     }
-
-    pub fn print(self:*Cmd) void {
-        std.debug.print(
-            \\Cmd = .{{
-            \\  .raw = {s},
-            \\  .split = [C-style null-terminated array of pointers to 0 terminated c strings],
-            \\  .fd_set = .{{ {d} {d} }},
-            \\  .is_builtin = {},
-            \\  .envp = [very large C-style null-terminated array of pointers to 0 terminated c strings],
-            \\  .opts = .{{
-            \\     .wait = {},
-            \\     .piped = {},
-            \\     .pipe_details = {{
-            \\          .out = {},
-            \\          .in = {},
-            \\      }},
-            \\   }},
-            \\}};
-            ++ "\n", .{
-                self.raw,
-                self.fd_set[0], self.fd_set[1],
-                self.is_builtin,
-                self.opts.wait,
-                self.opts.piped,
-                self.opts.pipe_details.out,
-                self.opts.pipe_details.in,
-            }
-        );
-    }
 };
 
 pub const ExecResult = struct {
