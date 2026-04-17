@@ -12,6 +12,8 @@ pub const Valid = enum {
     eval,
     set,
     alias,
+    reload,
+    dump,
 };
 
 pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
@@ -33,6 +35,8 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
         .eval => eval(term, argv.items),
         .set => set_opt(term, argv.items),
         .alias => alias(term, argv.items),
+        .reload => reload_config(term, argv.items),
+        .dump => dump(term, argv.items),
 
         // NOTE: this should never be touched, 'exit' is handled much earlier
         //  TODO: change this (for scripting)
@@ -95,4 +99,58 @@ pub fn alias(term:*Term, argv:[][]const u8) !void {
     if (term.vars.aliases == null) 
         term.vars.aliases = std.StringHashMap([]u8).init(alloc);
     try term.vars.aliases.?.put(name, value);
+}
+
+pub fn reload_config(term:*Term, argv:[][]const u8) !void {
+    _ = argv;
+    term.read_config() catch |e|
+        if (e == error.FileNotFound)
+            term.print_error(
+                "no config file found ({s}/.p_shrc); using default settings",
+                .{ term.env.get("HOME") orelse "$HOME" }
+            )
+        else
+            term.print_error("failed to read config: {t}", .{e});
+}
+
+pub fn dump(term:*Term, argv:[][]const u8) !void {
+    const ValidArgs = enum {
+        env,
+        aliases,
+        help, @"-h", @"--help",
+    };
+
+    const thing = std.meta.stringToEnum(
+        ValidArgs, if (argv.len < 2) "help" else argv[1]
+    ) orelse {
+        term.print_error("I do not know how to dump {s}, see help", .{argv[1]});
+        return error.InvalidArgument;
+    };
+
+    switch (thing) {
+        .env => {
+            var itr = term.env.iterator();
+            while (itr.next()) |pair| {
+                term.print("{s}={s}\n", .{pair.key_ptr.*, pair.value_ptr.*});
+            }
+        },
+        .aliases => {
+            if (term.vars.aliases == null) {
+                term.print("you have no aliases", .{});
+                return;
+            }
+            var itr = term.vars.aliases.?.iterator();
+            while (itr.next()) |pair| {
+                term.print("{s}={{\n    {s}\n}}\n\n", .{pair.key_ptr.*, pair.value_ptr.*});
+            }
+        },
+        .help, .@"-h", .@"--help" => {
+            term.print(
+                \\{s} (builtin) -- prints values stored by the shell
+                \\  I know how to dump (valid args):
+            ++ "\n", .{argv[0]});
+            for (std.meta.tags(ValidArgs)) |tag|
+                term.print("    {t}\n", .{tag});
+        },
+    }
 }
