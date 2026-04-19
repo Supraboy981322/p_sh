@@ -1,8 +1,9 @@
 const std = @import("std");
 const Term = @import("term.zig").Term;
 
+const Categories = enum{ aliases, general };
+
 pub fn read(term:*Term) !void {
-    const Category = enum{ aliases, general };
 
     const home_dir = term.env.get("HOME") orelse return;
     const config_path = b: {
@@ -31,7 +32,7 @@ pub fn read(term:*Term) !void {
     var string:u8 = 0;
     var esc:bool = false;
     var key_or_value:enum{ KEY, VALUE } = .KEY;
-    var category:?Category = null;
+    var category:?Categories = null;
 
     loop: while (reader.takeByte() catch null) |b| {
         if (std.ascii.isWhitespace(b) and string == 0 and !esc) {
@@ -93,7 +94,7 @@ pub fn read(term:*Term) !void {
             },
             '[' => {
                 const key_name = try key.toOwnedSlice(alloc);
-                category = std.meta.stringToEnum(Category, key_name) orelse {
+                category = std.meta.stringToEnum(Categories, key_name) orelse {
                     std.debug.panic("invalid category: {s}\n", .{key_name});
                     unreachable;
                 };
@@ -102,7 +103,7 @@ pub fn read(term:*Term) !void {
                 continue :loop;
             },
             ']' => {
-                if (category == null) 
+                if (category == null)
                     std.debug.panic("unexpected closing bracket", .{});
                 category = null;
                 continue :loop;
