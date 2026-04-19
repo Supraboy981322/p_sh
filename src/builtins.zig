@@ -48,18 +48,22 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
 }
 
 pub fn cd(term:*Term, argv:[][]const u8) !void {
-    if (argv.len < 2) {
-        term.print_error("not enough args; need a directory", .{});
-        return error.NotEnoughArgs;
-    }
+    const target =
+        if (argv.len < 2)
+            term.env.get("HOME") orelse {
+                term.print_error("not enough args; need a directory", .{});
+                return error.NotEnoughArgs;
+            }
+        else
+            argv[1];
     const dir =
-        if (std.mem.eql(u8, argv[1], "-")) b: {
+        if (std.mem.eql(u8, target, "-")) b: {
             const current = try term.cwd_path(term.alloc);
             defer term.alloc.free(current);
             term.print("{s}\n", .{current});
             break :b try term.alloc.dupe(u8, term.previous_wd);
         } else
-            @constCast(argv[1]);
+            @constCast(target);
     try term.cd(dir);
 }
 
