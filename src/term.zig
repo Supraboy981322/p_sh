@@ -268,7 +268,7 @@ pub const Term = struct {
                         unreachable; //$SHLVL invalid bytes
                 }
                 var buf:[1024]u8 = undefined; // TODO: will this ever be too small?
-                const n = std.fmt.printInt(&buf, v, 10, .lower, .{});
+                const n = std.fmt.printInt(&buf, v+1, 10, .lower, .{});
                 term.env.put("SHLVL", buf[0..n]) catch unreachable;
             } else
                 term.env.put("SHLVL", "1") catch unreachable;
