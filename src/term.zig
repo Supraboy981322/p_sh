@@ -128,6 +128,9 @@ pub const Term = struct {
             .previous_wd = undefined,
             .config = .{},
         };
+        defer res.init_state() catch |e| {
+            res.print_error("failed to init state file: {t}", .{e});
+        };
         res.init_env();
         res.previous_wd = try res.permanent_alloc.alloc(u8, 0);
         try res.cd(@constCast("."));
