@@ -22,8 +22,6 @@ pub const Term = struct {
     permanent_alloc:std.mem.Allocator,
     hist:*Hist,
 
-    previous_wd:[]u8,
-
     vars:struct {
         aliases:?std.StringHashMap([]u8) = null,
     } = .{},
@@ -126,7 +124,6 @@ pub const Term = struct {
             .env = if (env) |e| e else try std.process.getEnvMap(alloc),
             .permanent_alloc = alloc,
             .hist = hist,
-            .previous_wd = undefined,
             .config = .{},
         };
 
@@ -140,7 +137,6 @@ pub const Term = struct {
 
         res.init_env();
 
-        res.previous_wd = try res.permanent_alloc.alloc(u8, 0);
         try res.cd(@constCast("."));
 
         res.read_config() catch |e|
@@ -151,12 +147,14 @@ pub const Term = struct {
                 )
             else
                 res.print_error("failed to read config: {t}", .{e});
+
         return res;
     }
 
     pub fn cd(self:*Term, path:[]u8) !void {
-        self.permanent_alloc.free(self.previous_wd);
-        self.previous_wd = try self.cwd_path(self.permanent_alloc);
+        const old = try self.cwd_path(self.alloc);
+        defer self.alloc.free(old);
+        try self.env.put("OLDPWD", old);
         const dir = self.cwd().realpathAlloc(self.alloc, path) catch |e| {
             self.print_error("{t}", .{e});
             return;
@@ -192,7 +190,6 @@ pub const Term = struct {
             }
             aliases.deinit();
         }
-        self.permanent_alloc.free(self.previous_wd);
     }
 
     pub fn revert(self:*Term) !void {
