@@ -3,7 +3,7 @@ const parser = @import("parser.zig");
 const exec = @import("exec.zig");
 const globs = @import("globs.zig");
 const hlp = @import("helpers.zig");
-const state = @import("state.zig");
+const State = @import("state.zig").State;
 
 const Hist = globs.Hist;
 const Cmd = exec.Cmd;
@@ -27,6 +27,7 @@ pub const Term = struct {
     } = .{},
 
     config:Config,
+    state:State,
 
     pub const Config = struct {
         //level of colorizing in interactive
@@ -136,6 +137,7 @@ pub const Term = struct {
             .permanent_alloc = alloc,
             .hist = hist,
             .config = .{},
+            .state = undefined,
         };
 
         res.init_env();
@@ -151,12 +153,13 @@ pub const Term = struct {
             else
                 res.print_error("failed to read config: {t}", .{e});
 
-        state.init(&res) catch |e| {
+        res.state = State.init(&res) catch |e| {
             for ([_][]const u8{
                 "failed to init state file: ", @errorName(e), "\n\n"
             }) |chunk| {
                 _ = stderr.write(chunk) catch {};
             }
+            return res;
         };
 
         if (res.config.start_in_OLDPWD) {
