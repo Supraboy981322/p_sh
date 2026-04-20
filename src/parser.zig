@@ -381,3 +381,29 @@ pub fn colorize(term:*Term, in:[]u8) !struct { line:[]u8, cmd_ok:bool } {
         .cmd_ok = valid,
     };
 }
+
+pub fn resolve_string(alloc:std.mem.Allocator, in:[]u8, term:*Term) ![]u8 {
+    var res = try std.ArrayList(u8).initCapacity(term.alloc, 0);
+    defer res.deinit(term.alloc);
+
+    var i:usize = 0;
+    var esc:bool = false;
+    while (i < in.len) : (i += 1) {
+        const b = in[i];
+        if (esc) {
+            try res.append(term.alloc, b);
+            esc = false;
+            continue;
+        }
+        switch (b) {
+            '\\' => esc = true,
+            '$' => {
+                const name = try seek_var_name(term.alloc, in, &i);
+                defer term.alloc.free(name);
+                try res.appendSlice(term.alloc, term.env.get(name) orelse " ");
+            },
+            else => try res.appendSlice(term.alloc, b),
+        }
+    }
+    return try res.toOwnedSlice(alloc);
+}
