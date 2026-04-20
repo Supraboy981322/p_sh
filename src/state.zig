@@ -1,6 +1,27 @@
 const std = @import("std");
 const Term = @import("term.zig").Term;
 
+pub const Itr = struct {
+    reader:*std.Io.Reader,
+
+    pub fn init(file:std.fs.File) !Itr {
+        var buf:[1024]u8 = undefined;
+        var reader = file.reader(&buf).interface;
+        return .{
+            .reader = &reader,
+        };
+    }
+
+    pub fn next(self:*Itr) !?[]u8 {
+        return 
+            self.reader.takeDelimiterExclusive('\n') catch |e|
+                if (e != error.EndOfStream)
+                    return e
+                else
+                    null;
+    }
+};
+
 pub fn init(term:*Term) !void {
     const home = term.env.get("HOME") orelse return;
     const path = try std.fs.path.join(term.alloc, &.{ home, ".cache", "p_sh_state" });
@@ -19,16 +40,8 @@ pub fn init(term:*Term) !void {
     }) |chunk| {
         _ = try file.write(chunk);
     };
-
-    var buf:[1024]u8 = undefined;
-    var reader = file.reader(&buf).interface;
-    while (
-        reader.takeDelimiterExclusive('\n') catch |e|
-            if (e != error.EndOfStream)
-                return e
-            else
-                null
-    ) |line| {
+    var itr:Itr = try .init(file);
+    while (try itr.next()) |line| {
         std.debug.print("{s}\n", .{line});
     }
 }
