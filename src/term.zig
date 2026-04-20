@@ -34,9 +34,11 @@ pub const Term = struct {
         //  1 = only invalid command names
         //  2 = 1 + command args
         colorizing_level:u2 = 2,
+        start_in_OLDPWD:bool = false,
 
         const ValidOpts = enum {
-            @"colorizing_level"
+            @"colorizing_level",
+            @"start_in_previous_dir",
         };
 
         pub fn set(self:*Config, term:*Term, key:[]u8, value:[]u8) void {
@@ -60,6 +62,15 @@ pub const Term = struct {
                     }
                     self.colorizing_level = @intCast(value[0] - '0');
                 },
+                .start_in_previous_dir => {
+                    self.start_in_OLDPWD = hlp.parse_bool(value) catch {
+                        term.print_error(
+                            \\invalid config falue ("{s}") for {s}
+                            \\  HINT: expected a boolean ('true' or 'false')
+                        , .{ value, key });
+                        return;
+                    };
+                }
             }
         }
     };
