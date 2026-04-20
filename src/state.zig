@@ -12,13 +12,18 @@ pub const Itr = struct {
         };
     }
 
-    pub fn next(self:*Itr) !?[]u8 {
-        return 
+    pub fn next(self:*Itr) !?struct { name:[]const u8, value:[]const u8 } {
+        const line =
             self.reader.takeDelimiterExclusive('\n') catch |e|
-                if (e != error.EndOfStream)
-                    return e
+                return if (e != error.EndOfStream)
+                    e
                 else
                     null;
+        var split = std.mem.splitAny(u8, line, "=");
+        return .{
+            .name = split.first(),
+            .value = split.next() orelse return error.MissingValue,
+        };
     }
 };
 
@@ -41,7 +46,9 @@ pub fn init(term:*Term) !void {
         _ = try file.write(chunk);
     };
     var itr:Itr = try .init(file);
-    while (try itr.next()) |line| {
-        std.debug.print("{s}\n", .{line});
+    while (try itr.next()) |pair| {
+        const name = pair.name;
+        const value = pair.value;
+        std.debug.print("{s}={s}\n", .{name, value});
     }
 }
