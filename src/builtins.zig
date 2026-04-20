@@ -61,9 +61,11 @@ pub fn cd(term:*Term, argv:[][]const u8) !void {
             const current = try term.cwd_path(term.alloc);
             defer term.alloc.free(current);
             term.print("{s}\n", .{current});
-            break :b try term.alloc.dupe(u8, term.previous_wd);
+            std.debug.print("BUILTIN: {?s}\n", .{term.env.get("OLDPWD")});
+            break :b try term.alloc.dupe(u8, term.env.get("OLDPWD").?);
         } else
-            @constCast(target);
+            try term.alloc.dupe(u8, target);
+    defer term.alloc.free(dir);
     try term.cd(dir);
 }
 
