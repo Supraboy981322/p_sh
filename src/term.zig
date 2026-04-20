@@ -29,6 +29,8 @@ pub const Term = struct {
     config:Config,
     state:State,
 
+    start_ok:bool = false,
+
     pub const Config = struct {
         //level of colorizing in interactive
         //  0 = none (at all)
@@ -162,6 +164,8 @@ pub const Term = struct {
             return res;
         };
 
+        res.start_ok = true;
+
         if (res.config.start_in_OLDPWD) {
             if (res.env.get("OLDPWD")) |old| {
                 const dir = try res.alloc.dupe(u8, old);
@@ -192,6 +196,9 @@ pub const Term = struct {
             return;
         };
         try self.env.put("PWD", dir);
+        if (self.start_ok)
+            self.state.update(self) catch |e|
+                self.print_error("failed to update state file: {t}", .{e});
     }
 
     pub fn cwd(self:*Term) std.fs.Dir {
