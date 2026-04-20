@@ -74,7 +74,7 @@ pub const Cmd = struct {
 pub const ExecResult = struct {
     code:u8,
     quit:bool = false,
-    err:?anyerror = null
+    err:?(builtins.Errors || std.posix.ExecveError) = null
 };
 
 pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
@@ -165,72 +165,75 @@ pub fn parse_and_run(
 
         const matched_builtin = std.meta.stringToEnum(
             Builtins, std.mem.span(cmd.split[0].?)
-        ) orelse {
-            cmd.pid = try std.posix.fork();
-            if (cmd.pid == 0) {
-                errdefer std.posix.abort;
-                defer std.posix.abort();
-
-                //stdin
-                std.posix.dup2(
-                    if (cmd.opts.pipe_details.in and !@constCast(cmd).wants_file_direction(.IN))
-                        (&res.items[i - 1]).fd_set[0]
-                    else
-                        cmd.fd_set[0],
-                    std.posix.STDIN_FILENO
-                ) catch |e|
-                    @panic(@errorName(e));
-
-                //stdout
-                std.posix.dup2(
-                    cmd.fd_set[1],
-                    std.posix.STDOUT_FILENO
-                ) catch |e|
-                    @panic(@errorName(e));
-
-                for (res.items) |com| if (com.opts.pipe_details.out) {
-                    std.posix.close(com.fd_set[0]);
-                    std.posix.close(com.fd_set[1]);
-                };
-
-                const err = std.posix.execvpeZ(cmd.split[0].?, cmd.split, cmd.envp);
-                // TODO: figure out how to make these changes reflect in the original process
-                //  (fork communicating with the parent)
-                final.err = switch (err) {
-                    error.FileNotFound => error.CommandNotFound,
-                    else => err,
-                };
-                final.code = hlp.determine_exit_code(final.err.?);
-
-                term.print_error(
-                    "failed to run command: {?s} ({t})",
-                    .{ cmd.split[0], final.err orelse unreachable }
-                );
-
-                if (cmd.opts.pipe_details.in) for (res.items[0..i]) |*proc|
-                    std.posix.kill(proc.pid, 9) catch |e|
-                        term.print_error(
-                            "failed stop chain: {?s} ({t})",
-                            .{ cmd.split[0], e }
-                        );
-
-                std.posix.exit(1);
+        );
+        if (matched_builtin) |matched| {
+            cmd.is_builtin = true;
+            if (matched == .exit) {
+                final.quit = true;
+                continue;
             }
-            if (!cmd.opts.piped and cmd.opts.wait) {
-                const result = std.posix.waitpid(cmd.pid, 0);
-                if (result.status != 0) final.code = 1;
-                cmd.opts.wait = false;
-            }
-            continue;
-        };
-        cmd.is_builtin = true;
-        if (matched_builtin == .exit) {
-            final.quit = true;
-        } else
-            builtins.do(term, matched_builtin, cmd.*) catch |e| {
-                final.err = e;
-                final.code = hlp.determine_exit_code(e);
+        }
+
+        cmd.pid = try std.posix.fork();
+        if (cmd.pid == 0) {
+            errdefer std.posix.abort;
+            defer std.posix.abort();
+
+            //stdin
+            std.posix.dup2(
+                if (cmd.opts.pipe_details.in and !@constCast(cmd).wants_file_direction(.IN))
+                    (&res.items[i - 1]).fd_set[0]
+                else
+                    cmd.fd_set[0],
+                std.posix.STDIN_FILENO
+            ) catch |e|
+                @panic(@errorName(e));
+
+            //stdout
+            std.posix.dup2(
+                cmd.fd_set[1],
+                std.posix.STDOUT_FILENO
+            ) catch |e|
+                @panic(@errorName(e));
+
+            for (res.items) |com| if (com.opts.pipe_details.out) {
+                std.posix.close(com.fd_set[0]);
+                std.posix.close(com.fd_set[1]);
             };
+
+            const err = if (cmd.is_builtin)
+                builtins.do(term, matched_builtin.?, cmd.*)
+            else
+                std.posix.execvpeZ(cmd.split[0].?, cmd.split, cmd.envp);
+
+            // TODO: figure out how to make these changes reflect in the original process
+            //  (fork communicating with the parent)
+            final.err = if (cmd.is_builtin) err else switch (err) {
+                error.FileNotFound => error.CommandNotFound,
+                else => err,
+            };
+            final.code = hlp.determine_exit_code(final.err.?);
+
+            term.print_error(
+                "failed to run command: {?s} ({t})",
+                .{ cmd.split[0], final.err orelse unreachable }
+            );
+
+            if (cmd.opts.pipe_details.in) for (res.items[0..i]) |*proc|
+                std.posix.kill(proc.pid, 9) catch |e|
+                    term.print_error(
+                        "failed stop chain: {?s} ({t})",
+                        .{ cmd.split[0], e }
+                    );
+
+            std.posix.exit(1);
+        }
+        if (!cmd.opts.piped and cmd.opts.wait) {
+            const result = std.posix.waitpid(cmd.pid, 0);
+            if (result.status != 0) final.code = 1;
+            cmd.opts.wait = false;
+        }
+        continue;
     }
 
     //close file descriptors (they're duped in forked processes)

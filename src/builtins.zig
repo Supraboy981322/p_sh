@@ -16,12 +16,34 @@ pub const Valid = enum {
     dump,
 };
 
-pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
+pub const Errors = error {
+    NotEnoughArgs,
+    TooManyArgs,
+    FileNotFound,
+    InvalidArgument,
+    AccessDenied,
+    FileBusy,
+    FileSystem,
+    InvalidExe,
+    IsDir,
+    NameTooLong,
+    NotDir,
+    OutOfMemory,
+    PermissionDenied,
+    ProcessFdQuotaExceeded,
+    SystemFdQuotaExceeded,
+    SystemResources,
+    Unexpected,
+    CommandNotFound,
+};
+
+pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
     const alloc = term.alloc;
     var argv = try std.ArrayList([]const u8).initCapacity(alloc, 0);
     defer {
         for (argv.items) |a| alloc.free(a);
         _ = argv.deinit(alloc);
+        std.process.exit(0);
     }
 
     for (std.mem.span(cmd.split)) |arg| if (arg) |a| {
@@ -42,8 +64,9 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) !void {
         //  TODO: change this (for scripting)
         .exit => unreachable,
 
-    }) catch |e| switch (e) {
-        else => return e, // TODO: probably want to do something here
+    }) catch |e| {
+        term.print_error("{t}\n", .{e});
+        return e;
     };
 }
 
