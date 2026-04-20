@@ -27,9 +27,10 @@ pub fn init(term:*Term) !void {
     try file.seekTo(0);
     var reader_buf:[std.fs.max_path_bytes + 1024]u8 = undefined;
     var reader = file.reader(&reader_buf);
+
     var buf = try std.ArrayList(u8).initCapacity(term.alloc, 0);
     defer buf.deinit(term.alloc);
-    var name:Names = undefined;
+    var name:?Names = undefined;
     while (
         reader.interface.takeByte() catch |e|
             if (e != error.EndOfStream)
@@ -38,15 +39,23 @@ pub fn init(term:*Term) !void {
                 null
     ) |b| {
         switch (b) {
-            '\n' => if (buf.items.len > 0) {
-                std.debug.print("{s}={s}\n", .{@tagName(name), buf.items});
-                switch (name) {
+
+            '\n' => if (buf.items.len > 0 and name != null) {
+                std.debug.print("{s}={s}\n", .{@tagName(name.?), buf.items});
+                switch (name.?) {
                     .PWD => {
                         try term.env.put("OLDPWD", buf.items);
                     }
                 }
                 buf.clearAndFree(term.alloc);
+            } else if (name) |n| {
+                term.print_error(
+                    \\state file field missing value ({s})
+                    \\  HINT: key-value pairs must be on same line
+                , .{ @tagName(n) });
+                return error.MissingValue;
             },
+
             '=' => {
                 name = std.meta.stringToEnum(Names, buf.items) orelse {
                     _ = try reader.interface.discardDelimiterInclusive('\n');
@@ -54,6 +63,7 @@ pub fn init(term:*Term) !void {
                 };
                 buf.clearAndFree(term.alloc);
             },
+
             else => try buf.append(term.alloc, b),
         }
     }
