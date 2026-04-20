@@ -279,6 +279,10 @@ pub const Term = struct {
         }
     }
 
+    pub fn get_env_orerr(self:*Term, name:[]const u8) ![]const u8 {
+        return self.env.get(name) orelse error.EnvMissingValue;
+    }
+
     pub fn init_state(self:*Term) !void {
         const home = self.env.get("HOME") orelse return;
         const path = try std.fs.path.join(self.alloc, &.{ home, ".cache", "p_sh_state" });
@@ -292,8 +296,8 @@ pub const Term = struct {
         defer file.close();
 
         if ((try file.stat()).size == 0) for ([_][]const u8{
-            "SHLVL=", @constCast(self.env.get("SHLVL") orelse return error.EnvMissingValue), "\n",
-            "PWD=", @constCast(self.env.get("PWD") orelse return error.EnvMissingValue), "\n",
+            "SHLVL=", @constCast(try self.get_env_orerr("SHLVL")), "\n",
+            "PWD=", @constCast(try self.get_env_orerr("PWD")), "\n",
         }) |chunk| {
             _ = try file.write(chunk);
         };
