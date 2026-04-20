@@ -57,11 +57,11 @@ pub fn init(term:*Term) !void {
             },
 
             '=' => {
+                defer buf.clearAndFree(term.alloc);
                 name = std.meta.stringToEnum(Names, buf.items) orelse {
                     _ = try reader.interface.discardDelimiterInclusive('\n');
                     continue;
                 };
-                buf.clearAndFree(term.alloc);
             },
 
             else => try buf.append(term.alloc, b),
