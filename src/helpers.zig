@@ -60,3 +60,21 @@ pub fn to_regular_map(
         try out.append(alloc, std.mem.span(t));
     return try out.toOwnedSlice(alloc);
 }
+
+pub fn lower_in_place(str:*[]u8) void {
+    for (str.*, 0..) |b, i|
+        str.*[i] = std.ascii.toLower(b);
+}
+
+pub fn parse_bool(str:[]u8) !bool {
+    lower_in_place(@constCast(&str));
+    const matched = std.meta.stringToEnum(
+        enum{ @"true", @"false", @"1", @"0" }, str
+    ) orelse {
+        return error.InvalidBool;
+    };
+    return switch(matched) {
+        .@"true", .@"1" => true,
+        else => false,
+    };
+}
