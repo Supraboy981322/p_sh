@@ -3,6 +3,7 @@ const parser = @import("parser.zig");
 const exec = @import("exec.zig");
 const globs = @import("globs.zig");
 const hlp = @import("helpers.zig");
+const state = @import("state.zig");
 
 const Hist = globs.Hist;
 const Cmd = exec.Cmd;
@@ -128,12 +129,20 @@ pub const Term = struct {
             .previous_wd = undefined,
             .config = .{},
         };
-        defer res.init_state() catch |e| {
-            res.print_error("failed to init state file: {t}", .{e});
+
+        defer state.init(&res) catch |e| {
+            for ([_][]const u8{
+                "failed to init state file: ", @errorName(e), "\n\n"
+            }) |chunk| {
+                _ = stderr.write(chunk) catch {};
+            }
         };
+
         res.init_env();
+
         res.previous_wd = try res.permanent_alloc.alloc(u8, 0);
         try res.cd(@constCast("."));
+
         res.read_config() catch |e|
             if (e == error.FileNotFound)
                 res.print_error(
@@ -281,9 +290,5 @@ pub const Term = struct {
 
     pub fn get_env_orerr(self:*Term, name:[]const u8) ![]const u8 {
         return self.env.get(name) orelse error.EnvMissingValue;
-    }
-
-    pub fn init_state(self:*Term) !void {
-        try @import("state.zig").init(self);
     }
 };
