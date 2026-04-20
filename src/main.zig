@@ -148,7 +148,7 @@ pub fn main() !void {
             try stdout.flush();
             exit_code = b: {
                 const info = exec.parse_and_run(line.items, &term) catch |e| {
-                    term.print_error("couldn't parse command: {t}", .{e});
+                    term.print_error("couldn't run command: {t}", .{e});
                     break :b 1;
                 };
 

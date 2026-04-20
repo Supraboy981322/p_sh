@@ -16,6 +16,8 @@ pub const Term = struct {
     stdout_file:*std.fs.File,
     stderr_file:*std.fs.File,
 
+    coms:[2]std.posix.fd_t,
+
     alloc:std.mem.Allocator,
     env:std.process.EnvMap,
 
@@ -140,6 +142,7 @@ pub const Term = struct {
             .hist = hist,
             .config = .{},
             .state = undefined,
+            .coms = try std.posix.pipe(),
         };
 
         res.init_env();
@@ -318,5 +321,23 @@ pub const Term = struct {
 
     pub fn get_env_orerr(self:*Term, name:[]const u8) ![]const u8 {
         return self.env.get(name) orelse error.EnvMissingValue;
+    }
+
+    pub fn action(self:*Term, stuff:@import("coms.zig").Action) !void {
+        switch (stuff.action) {
+            .chdir => try self.cd(stuff.stuff),
+            .reload => {
+                self.read_config() catch |e|
+                    if (e == error.FileNotFound)
+                        self.print_error(
+                            "no config file found ({s}/.p_shrc); using default settings",
+                            .{ self.env.get("HOME") orelse "$HOME" }
+                        )
+                    else
+                        self.print_error("failed to read config: {t}", .{e});
+            },
+
+            .EXIT => unreachable,
+        }
     }
 };

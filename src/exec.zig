@@ -48,6 +48,7 @@ pub const Cmd = struct {
     opts:ExecOpts = .{ .wait = true, .piped = false },
     envp:[*:null]const ?[*:0]const u8 = undefined, // TODO: determine if I should free this
     is_builtin:bool = false,
+    coms:[2]std.posix.fd_t = undefined,
 
     pub const ArgInfo = struct {
         raw:?[*:0]const u8,
@@ -82,6 +83,10 @@ pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
     for (res.items) |*cmd| {
         defer i += 1;
         cmd.split = try parser.split_args(cmd.raw, term);
+        if (std.meta.stringToEnum(Builtins, std.mem.span(cmd.split[0].?))) |_| {
+            cmd.is_builtin = true;
+            cmd.coms = try std.posix.pipe();
+        }
 
         const pipe_details = cmd.opts.pipe_details;
         if (pipe_details.file.do) {
@@ -166,17 +171,9 @@ pub fn parse_and_run(
         const matched_builtin = std.meta.stringToEnum(
             Builtins, std.mem.span(cmd.split[0].?)
         );
-        if (matched_builtin) |matched| {
-            cmd.is_builtin = true;
-            if (matched == .exit) {
-                final.quit = true;
-                continue;
-            }
-        }
 
         cmd.pid = try std.posix.fork();
         if (cmd.pid == 0) {
-            errdefer std.posix.abort;
             defer std.posix.abort();
 
             //stdin
@@ -196,10 +193,15 @@ pub fn parse_and_run(
             ) catch |e|
                 @panic(@errorName(e));
 
-            for (res.items) |com| if (com.opts.pipe_details.out) {
-                std.posix.close(com.fd_set[0]);
-                std.posix.close(com.fd_set[1]);
-            };
+            for (res.items) |com| {
+                if (cmd.is_builtin) {
+                    std.posix.close(cmd.coms[0]);
+                }
+                if (com.opts.pipe_details.out) {
+                    std.posix.close(com.fd_set[0]);
+                    std.posix.close(com.fd_set[1]);
+                }
+            }
 
             const err = if (cmd.is_builtin)
                 builtins.do(term, matched_builtin.?, cmd.*)
@@ -228,7 +230,7 @@ pub fn parse_and_run(
 
             std.posix.exit(1);
         }
-        if (!cmd.opts.piped and cmd.opts.wait) {
+        if (!cmd.opts.piped and cmd.opts.wait and !cmd.is_builtin) {
             const result = std.posix.waitpid(cmd.pid, 0);
             if (result.status != 0) final.code = 1;
             cmd.opts.wait = false;
@@ -237,13 +239,37 @@ pub fn parse_and_run(
     }
 
     //close file descriptors (they're duped in forked processes)
-     for (res.items) |*cmd| if (cmd.opts.pipe_details.out) {
-        std.posix.close(cmd.fd_set[0]);
-        std.posix.close(cmd.fd_set[1]);
-     };
+     for (res.items) |*cmd| {
+        if (cmd.is_builtin) {
+            std.posix.close(cmd.coms[1]);
+        }
+        if (cmd.opts.pipe_details.out) {
+            std.posix.close(cmd.fd_set[0]);
+            std.posix.close(cmd.fd_set[1]);
+        }
+    }
+
+    for (res.items) |*cmd| if (cmd.is_builtin) {
+        var buf = try std.ArrayList(u8).initCapacity(term.alloc, 0);
+        defer buf.deinit(term.alloc);
+        var reader = &@constCast(&(std.fs.File{ .handle = cmd.coms[0] }).reader(&.{})).interface;
+        try reader.appendRemainingUnlimited(term.alloc, &buf);
+        if (buf.items.len > 0) {
+            if (buf.items[buf.items.len - 1] == '\n')
+                _ = buf.pop();
+            const stuff = try @import("coms.zig").parse(buf.items);
+            if (stuff.action == .EXIT)
+                final.quit = true
+            else
+                try term.action(stuff);
+        } else {
+            std.debug.print("empty", .{});
+        }
+    };
+    
 
     //wait for each command to finish
-    for (res.items) |cmd| if (!cmd.is_builtin and cmd.opts.wait) {
+    for (res.items) |cmd| if (cmd.opts.wait) {
         const result = std.posix.waitpid(cmd.pid, 0);
         // TODO: figure out how to properly set this
         //  (on error, all I get is 256 (regardless of the error))

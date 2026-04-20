@@ -38,6 +38,7 @@ pub const Errors = error {
 };
 
 pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
+
     const alloc = term.alloc;
     var argv = try std.ArrayList([]const u8).initCapacity(alloc, 0);
     defer {
@@ -50,27 +51,30 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
         try argv.append(alloc, std.mem.span(a));
     };
 
-    (switch (name) {
-        .cd => cd(term, argv.items),
-        .history => history(term, argv.items),
-        .@":" => no_op(term, argv.items),
-        .eval => eval(term, argv.items),
-        .set => set_opt(term, argv.items),
-        .alias => alias(term, argv.items),
-        .reload => reload_config(term, argv.items),
-        .dump => dump(term, argv.items),
+    const coms = std.fs.File{ .handle = cmd.coms[1] };
+
+    const func:*const fn (*Term, [][]const u8, std.fs.File) anyerror!void = switch (name) {
+        .cd => cd,
+        .history => history,
+        .@":" => no_op,
+        .eval => eval,
+        .set => set_opt,
+        .alias => alias,
+        .reload => reload_config,
+        .dump => dump,
 
         // NOTE: this should never be touched, 'exit' is handled much earlier
         //  TODO: change this (for scripting)
-        .exit => unreachable,
+        .exit => exit,
 
-    }) catch |e| {
+    };
+    func(term, argv.items, coms) catch |e| {
         term.print_error("{t}\n", .{e});
         return e;
     };
 }
 
-pub fn cd(term:*Term, argv:[][]const u8) !void {
+pub fn cd(term:*Term, argv:[][]const u8, coms:std.fs.File) !void {
     const target =
         if (argv.len < 2)
             term.env.get("HOME") orelse {
@@ -88,28 +92,26 @@ pub fn cd(term:*Term, argv:[][]const u8) !void {
         } else
             try term.alloc.dupe(u8, target);
     defer term.alloc.free(dir);
-    try term.cd(dir);
+    _ = try coms.write("chdir:");
+    _ = try coms.write(dir);
 }
 
-pub fn history(term:*Term, argv:[][]const u8) !void {
+pub fn history(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
     if (argv.len > 1)
         term.TODO("history command args", .{});
     for (term.hist.arr[0..term.hist.len], 0..) |line, i|
         term.print("{d}: {s}\n", .{i, line});
 }
 
-pub fn no_op(term:*Term, argv:[][]const u8) !void {
-     _ = .{ term, argv };
-    return;
-}
+pub fn no_op(_:*Term, _:[][]const u8, _:std.fs.File) !void {}
 
-pub fn eval(term:*Term, argv:[][]const u8) anyerror!void {
+pub fn eval(term:*Term, argv:[][]const u8, _:std.fs.File) anyerror!void {
     const joined = try std.mem.join(term.alloc, " ", @constCast(argv[1..]));
     defer term.alloc.free(joined);
     _ = try exec.parse_and_run(joined, term);
 }
 
-pub fn set_opt(term:*Term, argv:[][]const u8) !void {
+pub fn set_opt(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
     if (argv.len != 3)
         return if (argv.len < 3)
             error.NotEnoughArgs
@@ -118,30 +120,24 @@ pub fn set_opt(term:*Term, argv:[][]const u8) !void {
     term.config.set(term, @constCast(argv[1]), @constCast(argv[2]));
 }
 
-pub fn alias(term:*Term, argv:[][]const u8) !void {
+pub fn alias(term:*Term, argv:[][]const u8, coms:std.fs.File) !void {
+    _ = coms;
     if (argv.len < 3)
         return error.NotEnoughArgs;
     const alloc = term.permanent_alloc;
     const name = try alloc.dupe(u8, argv[1]);
     const value = try alloc.dupe(u8, argv[2]);
-    if (term.vars.aliases == null) 
+    if (term.vars.aliases == null)
         term.vars.aliases = std.StringHashMap([]u8).init(alloc);
     try term.vars.aliases.?.put(name, value);
 }
 
-pub fn reload_config(term:*Term, argv:[][]const u8) !void {
+pub fn reload_config(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {
     _ = argv;
-    term.read_config() catch |e|
-        if (e == error.FileNotFound)
-            term.print_error(
-                "no config file found ({s}/.p_shrc); using default settings",
-                .{ term.env.get("HOME") orelse "$HOME" }
-            )
-        else
-            term.print_error("failed to read config: {t}", .{e});
+    _ = try coms.write("reload:config");
 }
 
-pub fn dump(term:*Term, argv:[][]const u8) !void {
+pub fn dump(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
     const ValidArgs = enum {
         env,
         aliases,
@@ -181,4 +177,8 @@ pub fn dump(term:*Term, argv:[][]const u8) !void {
                 term.print("    {t}\n", .{tag});
         },
     }
+}
+
+pub fn exit(_:*Term, _:[][]const u8, coms:std.fs.File) !void {
+    _ = try coms.write("EXIT:0");
 }
