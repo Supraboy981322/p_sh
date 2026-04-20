@@ -138,25 +138,6 @@ pub const Term = struct {
             .config = .{},
         };
 
-        defer {
-            state.init(&res) catch |e| {
-                for ([_][]const u8{
-                    "failed to init state file: ", @errorName(e), "\n\n"
-                }) |chunk| {
-                    _ = stderr.write(chunk) catch {};
-                }
-            };
-            if (res.config.start_in_OLDPWD) {
-                if (res.env.get("OLDPWD")) |old| {
-                    const dir = res.alloc.dupe(u8, old) catch |e| @panic(@errorName(e));
-                    defer res.alloc.free(dir);
-                    res.cd(dir) catch |e| @panic(@errorName(e));
-                } else res.print_error(
-                    "failed to start in OLDPWD: $OLDPWD not set" , .{}
-                );
-            }
-        }
-
         res.init_env();
 
         try res.cd(@constCast("."));
@@ -169,6 +150,25 @@ pub const Term = struct {
                 )
             else
                 res.print_error("failed to read config: {t}", .{e});
+
+        state.init(&res) catch |e| {
+            for ([_][]const u8{
+                "failed to init state file: ", @errorName(e), "\n\n"
+            }) |chunk| {
+                _ = stderr.write(chunk) catch {};
+            }
+        };
+
+        if (res.config.start_in_OLDPWD) {
+            if (res.env.get("OLDPWD")) |old| {
+                const dir = try res.alloc.dupe(u8, old);
+                defer res.alloc.free(dir);
+                try res.cd(dir);
+            } else res.print_error(
+                "failed to start in OLDPWD: $OLDPWD not set" , .{}
+            );
+        }
+
 
         return res;
     }
