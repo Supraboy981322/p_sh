@@ -128,6 +128,7 @@ pub const Term = struct {
             .previous_wd = undefined,
             .config = .{},
         };
+        res.init_env();
         res.previous_wd = try res.permanent_alloc.alloc(u8, 0);
         try res.cd(@constCast("."));
         res.read_config() catch |e|
@@ -252,5 +253,25 @@ pub const Term = struct {
             aliases.get(name) != null
         else
             false;
+    }
+
+    pub fn init_env(term:*Term) void {
+        {
+            const shlvl = term.env.get("SHLVL");
+            if (shlvl) |lvl| {
+                var v:usize = 0;
+                for (lvl) |b| {
+                    if (b >= '0' and b <= '9') {
+                        v *= 10;
+                        v += b - '0';
+                    } else
+                        unreachable; //$SHLVL invalid bytes
+                }
+                var buf:[1024]u8 = undefined; // TODO: will this ever be too small?
+                const n = std.fmt.printInt(&buf, v, 10, .lower, .{});
+                term.env.put("SHLVL", buf[0..n]) catch unreachable;
+            } else
+                term.env.put("SHLVL", "1") catch unreachable;
+        }
     }
 };
