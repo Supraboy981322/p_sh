@@ -172,7 +172,6 @@ pub const Term = struct {
             );
         }
 
-
         return res;
     }
 
