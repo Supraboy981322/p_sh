@@ -49,7 +49,7 @@ pub fn init(term:*Term) !void {
             },
             '=' => {
                 name = std.meta.stringToEnum(Names, buf.items) orelse {
-                    //_ = try reader.interface.discardDelimiterInclusive('\n');
+                    _ = try reader.interface.discardDelimiterInclusive('\n');
                     continue;
                 };
                 buf.clearAndFree(term.alloc);
