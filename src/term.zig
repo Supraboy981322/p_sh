@@ -157,6 +157,7 @@ pub const Term = struct {
             self.print_error("{t}", .{e});
             return;
         };
+        try self.env.put("PWD", dir);
     }
 
     pub fn cwd(self:*Term) std.fs.Dir {
