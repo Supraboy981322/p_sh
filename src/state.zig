@@ -41,11 +41,8 @@ pub fn init(term:*Term) !void {
         switch (b) {
 
             '\n' => if (buf.items.len > 0 and name != null) {
-                std.debug.print("{s}={s}\n", .{@tagName(name.?), buf.items});
                 switch (name.?) {
-                    .PWD => {
-                        try term.env.put("OLDPWD", buf.items);
-                    }
+                    .PWD => try term.env.put("OLDPWD", buf.items),
                 }
                 buf.clearAndFree(term.alloc);
             } else if (name) |n| {
