@@ -69,7 +69,7 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
 
     };
     func(term, argv.items, coms) catch |e| {
-        term.print_error("{t}\n", .{e});
+        term.print_error("{t}", .{e});
         return e;
     };
 }

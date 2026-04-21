@@ -201,7 +201,8 @@ pub const Term = struct {
         try self.env.put("PWD", dir);
         if (self.start_ok)
             self.state.update(self) catch |e|
-                self.print_error("failed to update state file: {t}", .{e});
+                self.print_error("failed to update state file: {t}", .{e}
+            );
     }
 
     pub fn cwd(self:*Term) std.fs.Dir {

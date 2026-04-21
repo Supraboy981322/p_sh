@@ -240,9 +240,8 @@ pub fn parse_and_run(
 
     //close file descriptors (they're duped in forked processes)
      for (res.items) |*cmd| {
-        if (cmd.is_builtin) {
+        if (cmd.is_builtin)
             std.posix.close(cmd.coms[1]);
-        }
         if (cmd.opts.pipe_details.out) {
             std.posix.close(cmd.fd_set[0]);
             std.posix.close(cmd.fd_set[1]);
@@ -262,8 +261,6 @@ pub fn parse_and_run(
                 final.quit = true
             else
                 try term.action(stuff);
-        } else {
-            std.debug.print("empty", .{});
         }
     };
     
