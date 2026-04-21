@@ -166,14 +166,16 @@ pub fn parse_and_run(
         const matched_builtin = std.meta.stringToEnum(
             Builtins, std.mem.span(cmd.split[0].?)
         );
-        if (matched_builtin) |_| {
+        if (matched_builtin) |_|
             cmd.is_builtin = true;
-            cmd.coms = try std.posix.pipe();
-        }
 
+        cmd.coms = try std.posix.pipe();
         cmd.pid = try std.posix.fork();
         if (cmd.pid == 0) {
-            defer std.posix.abort();
+            defer {
+                std.posix.close(cmd.coms[1]);
+                std.posix.abort();
+            }
 
             //stdin
             std.posix.dup2(
@@ -193,8 +195,7 @@ pub fn parse_and_run(
                 @panic(@errorName(e));
 
             for (res.items) |com| {
-                if (com.is_builtin)
-                    std.posix.close(com.coms[0]);
+                std.posix.close(com.coms[0]);
                 if (com.opts.pipe_details.out) {
                     std.posix.close(com.fd_set[0]);
                     std.posix.close(com.fd_set[1]);
@@ -232,7 +233,7 @@ pub fn parse_and_run(
                         .{ cmd.split[0], e }
                     );
 
-            std.posix.exit(1);
+            std.posix.exit(final.code);
         }
         if (!cmd.opts.piped and cmd.opts.wait and !cmd.is_builtin) {
             const result = std.posix.waitpid(cmd.pid, 0);
