@@ -329,7 +329,13 @@ pub const Term = struct {
 
     pub fn action(self:*Term, stuff:@import("coms.zig").Action) !void {
         switch (stuff.action) {
-            .chdir => try self.cd(stuff.stuff),
+            .chdir => self.cd(stuff.stuff) catch |e| 
+                self.print_error("cannot change directory:\n\t{t}", .{
+                switch (e) {
+                    error.FileNotFound => error.@"no such file or directory",
+                    else => e,
+                }
+            }),
             .reload => {
                 self.read_config() catch |e|
                     if (e == error.FileNotFound)
