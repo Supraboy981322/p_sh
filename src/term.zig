@@ -381,6 +381,7 @@ pub const Term = struct {
         const raw = self.env.get("PS1") orelse
             "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{cwd}\x1b[3;36m]"
                 ++ "(\x1b[0m{char}\x1b[3;36m):\x1b[0m";
+
         const resolved = try parser.resolve_string(self.alloc, @constCast(raw), self);
 
         var res = try std.ArrayList(u8).initCapacity(self.alloc, 0);
