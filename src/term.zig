@@ -86,8 +86,11 @@ pub const Term = struct {
         stuff:anytype
     ) void {
         var stderr = @constCast(&self.stderr_file.writer(&.{})).interface;
-        stderr.print("\n" ++ msg ++ "\n", stuff) catch {};
-        stderr.flush() catch {};
+        const altered = "\n" ++ msg ++ "\n";
+        stderr.print(altered, stuff) catch
+            std.debug.print(altered, stuff);
+        stderr.flush() catch
+            std.debug.print(altered, stuff);
     }
 
     pub fn message(
