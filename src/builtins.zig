@@ -111,13 +111,16 @@ pub fn eval(term:*Term, argv:[][]const u8, _:std.fs.File) anyerror!void {
     _ = try exec.parse_and_run(joined, term);
 }
 
-pub fn set_opt(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
+pub fn set_opt(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {
     if (argv.len != 3)
         return if (argv.len < 3)
             error.NotEnoughArgs
         else
             error.TooManyArgs;
-    term.config.set(term, @constCast(argv[1]), @constCast(argv[2]));
+    for ([_][]const u8{
+        "config:", argv[1], "|", argv[2]
+    }) |chunk|
+        _ = try coms.write(chunk);
 }
 
 pub fn alias(term:*Term, argv:[][]const u8, coms:std.fs.File) !void {

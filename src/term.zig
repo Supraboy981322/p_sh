@@ -347,6 +347,11 @@ pub const Term = struct {
                         self.print_error("failed to read config: {t}", .{e});
             },
 
+            .config => {
+                var itr = std.mem.splitAny(u8, stuff.stuff, "|");
+                self.config.set(self, @constCast(itr.first()), @constCast(itr.next().?));
+            },
+
             .EXIT => unreachable,
         }
     }

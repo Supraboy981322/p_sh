@@ -3,6 +3,7 @@ const std = @import("std");
 pub const Actions = enum {
     reload,
     chdir,
+    config,
     EXIT,
 };
 
