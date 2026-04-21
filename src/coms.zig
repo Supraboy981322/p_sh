@@ -9,8 +9,9 @@ pub const Actions = enum {
     EXIT,
 };
 
-//reload:config
-//chdir:some/dir/name
+// NOTE: format (examples)
+//  reload:config
+//  chdir:some/dir/name
 
 pub const Action = struct {
     action:Actions,
