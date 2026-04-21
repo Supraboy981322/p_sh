@@ -191,15 +191,15 @@ pub const Term = struct {
         try self.env.put("OLDPWD", old);
         const dir = self.cwd().realpathAlloc(self.alloc, path) catch |e| {
             self.print_error("{t}", .{e});
-            return;
+            return e;
         };
         defer self.alloc.free(dir);
         @constCast(&(std.fs.openDirAbsolute(dir, .{}) catch |e| {
             self.print_error("{t}", .{e});
-            return;
+            return e;
         })).setAsCwd() catch |e| {
             self.print_error("{t}", .{e});
-            return;
+            return e;
         };
         try self.env.put("PWD", dir);
         if (self.start_ok)
