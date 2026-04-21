@@ -69,7 +69,7 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
 
     };
     func(term, argv.items, coms) catch |e| {
-        term.print_error("{t}", .{e});
+        try print(.err, "{t}", .{e});
         return e;
     };
 }
@@ -78,7 +78,7 @@ pub fn cd(term:*Term, argv:[][]const u8, coms:std.fs.File) !void {
     const target =
         if (argv.len < 2)
             term.env.get("HOME") orelse {
-                term.print_error("not enough args; need a directory", .{});
+                try print(.err, "not enough args; need a directory", .{});
                 return error.NotEnoughArgs;
             }
         else
@@ -87,7 +87,7 @@ pub fn cd(term:*Term, argv:[][]const u8, coms:std.fs.File) !void {
         if (std.mem.eql(u8, target, "-")) b: {
             const current = try term.cwd_path(term.alloc);
             defer term.alloc.free(current);
-            term.print("{s}\n", .{current});
+            try print(.out, "{s}\n", .{current});
             break :b try term.alloc.dupe(u8, term.env.get("OLDPWD").?);
         } else
             try term.alloc.dupe(u8, target);
@@ -100,7 +100,7 @@ pub fn history(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
     if (argv.len > 1)
         term.TODO("history command args", .{});
     for (term.hist.arr[0..term.hist.len], 0..) |line, i|
-        term.print("{d}: {s}\n", .{i, line});
+        try print(.out, "{d}: {s}\n", .{i, line});
 }
 
 pub fn no_op(_:*Term, _:[][]const u8, _:std.fs.File) !void {}
@@ -147,7 +147,7 @@ pub fn dump(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
     const thing = std.meta.stringToEnum(
         ValidArgs, if (argv.len < 2) "help" else argv[1]
     ) orelse {
-        term.print_error("I do not know how to dump {s}, see help", .{argv[1]});
+        try print(.err, "I do not know how to dump {s}, see help", .{argv[1]});
         return error.InvalidArgument;
     };
 
@@ -155,30 +155,39 @@ pub fn dump(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
         .env => {
             var itr = term.env.iterator();
             while (itr.next()) |pair| {
-                term.print("{s}={s}\n", .{pair.key_ptr.*, pair.value_ptr.*});
+                try print(.out, "{s}={s}\n", .{pair.key_ptr.*, pair.value_ptr.*});
             }
         },
         .aliases => {
             if (term.vars.aliases == null) {
-                term.print("you have no aliases\n", .{});
+                try print(.out, "you have no aliases\n", .{});
                 return;
             }
             var itr = term.vars.aliases.?.iterator();
             while (itr.next()) |pair| {
-                term.print("{s}={{\n    {s}\n}}\n\n", .{pair.key_ptr.*, pair.value_ptr.*});
+                try print(.out, "{s}={{\n    {s}\n}}\n\n", .{pair.key_ptr.*, pair.value_ptr.*});
             }
         },
         .help, .@"-h", .@"--help" => {
-            term.print(
+            try print(.out,
                 \\{s} (builtin) -- prints values stored by the shell
                 \\  I know how to dump (valid args):
             ++ "\n", .{argv[0]});
             for (std.meta.tags(ValidArgs)) |tag|
-                term.print("    {t}\n", .{tag});
+                try print(.out, "    {t}\n", .{tag});
         },
     }
 }
 
 pub fn exit(_:*Term, _:[][]const u8, coms:std.fs.File) !void {
     _ = try coms.write("EXIT:0");
+}
+
+pub fn print(comptime where:enum { err, out }, comptime msg:[]const u8, args:anytype) !void {
+    var file = switch (where) {
+        .err => std.fs.File.stderr(),
+        .out => std.fs.File.stdout(),
+    };
+    const writer = &@constCast(&file.writer(&.{})).interface;
+    try writer.print(msg, args);
 }
