@@ -379,8 +379,8 @@ pub const Term = struct {
         );
 
         const raw = self.env.get("PS1") orelse
-            "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{CWD}\x1b[3;36m]"
-                ++ "(\x1b[0m{CHAR}\x1b[3;36m):\x1b[0m";
+            "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{cwd}\x1b[3;36m]"
+                ++ "(\x1b[0m{char}\x1b[3;36m):\x1b[0m";
         const resolved = try parser.resolve_string(self.alloc, @constCast(raw), self);
 
         var res = try std.ArrayList(u8).initCapacity(self.alloc, 0);
@@ -400,15 +400,15 @@ pub const Term = struct {
                     const start:usize = i;
                     while (resolved[i] != '}') : (i += 1) {}
                     const Valid = enum {
-                        CHAR, CWD, @"_",
+                       @"_", char, cwd, time,
                     };
                     const foo = std.meta.stringToEnum(Valid, resolved[start..i]) orelse .@"_";
                     switch (foo) {
                         .@"_" => {},
-                        .CWD => {
+                        .cwd => {
                             try res.appendSlice(self.alloc, try self.pretty_path());
                         },
-                        .CHAR => try res.appendSlice(self.alloc, ps1_char_colorized),
+                        .char => try res.appendSlice(self.alloc, ps1_char_colorized),
                     }
                     continue;
                 } else { esc = true; continue; },
