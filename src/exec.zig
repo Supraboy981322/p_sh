@@ -193,9 +193,8 @@ pub fn parse_and_run(
                 @panic(@errorName(e));
 
             for (res.items) |com| {
-                if (cmd.is_builtin) {
-                    std.posix.close(cmd.coms[0]);
-                }
+                if (com.is_builtin)
+                    std.posix.close(com.coms[0]);
                 if (com.opts.pipe_details.out) {
                     std.posix.close(com.fd_set[0]);
                     std.posix.close(com.fd_set[1]);
@@ -252,6 +251,7 @@ pub fn parse_and_run(
         defer buf.deinit(term.alloc);
         var reader = &@constCast(&(std.fs.File{ .handle = cmd.coms[0] }).reader(&.{})).interface;
         try reader.appendRemainingUnlimited(term.alloc, &buf);
+        std.posix.close(cmd.coms[0]);
         if (buf.items.len > 0) {
             if (buf.items[buf.items.len - 1] == '\n')
                 _ = buf.pop();
