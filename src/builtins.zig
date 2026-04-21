@@ -123,16 +123,13 @@ pub fn set_opt(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {
         _ = try coms.write(chunk);
 }
 
-pub fn alias(term:*Term, argv:[][]const u8, coms:std.fs.File) !void {
-    _ = coms;
+pub fn alias(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {
     if (argv.len < 3)
         return error.NotEnoughArgs;
-    const alloc = term.permanent_alloc;
-    const name = try alloc.dupe(u8, argv[1]);
-    const value = try alloc.dupe(u8, argv[2]);
-    if (term.vars.aliases == null)
-        term.vars.aliases = std.StringHashMap([]u8).init(alloc);
-    try term.vars.aliases.?.put(name, value);
+    for ([_][]const u8 {
+        "alias:", argv[1], "|", argv[2]
+    }) |chunk|
+        _ = try coms.write(chunk);
 }
 
 pub fn reload_config(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {

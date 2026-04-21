@@ -352,6 +352,16 @@ pub const Term = struct {
                 self.config.set(self, @constCast(itr.first()), @constCast(itr.next().?));
             },
 
+            .alias => {
+                var itr = std.mem.splitAny(u8, stuff.stuff, "|");
+                const alloc = self.permanent_alloc;
+                const name = try alloc.dupe(u8, itr.first());
+                const value = try alloc.dupe(u8, itr.next().?);
+                if (self.vars.aliases == null)
+                    self.vars.aliases = std.StringHashMap([]u8).init(alloc);
+                try self.vars.aliases.?.put(name, value);
+            },
+
             .EXIT => unreachable,
         }
     }

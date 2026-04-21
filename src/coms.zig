@@ -4,6 +4,7 @@ pub const Actions = enum {
     reload,
     chdir,
     config,
+    alias,
     EXIT,
 };
 
