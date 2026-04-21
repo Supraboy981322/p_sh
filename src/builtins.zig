@@ -35,16 +35,40 @@ pub const Errors = error {
     SystemResources,
     Unexpected,
     CommandNotFound,
+    WriteFailed,
+    InputOutput,
+    OperationAborted,
+    BrokenPipe,
+    ConnectionResetByPeer,
+    WouldBlock,
+    ProcessNotFound,
+    LockViolation,
+    SharingViolation,
+    PathAlreadyExists,
+    PipeBusy,
+    NoDevice,
+    InvalidWtf8,
+    BadPathName,
+    NetworkNotFound,
+    AntivirusInterference,
+    SymLinkLoop,
+    FileTooBig,
+    NoSpaceLeft,
+    DeviceBusy,
+    NotSupported,
+    UnrecognizedVolume,
+    DiskQuota,
+    NotOpenForWriting,
+    MessageTooBig,
 };
 
 pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
-
     const alloc = term.alloc;
     var argv = try std.ArrayList([]const u8).initCapacity(alloc, 0);
+
     defer {
         for (argv.items) |a| alloc.free(a);
         _ = argv.deinit(alloc);
-        std.process.exit(0);
     }
 
     for (std.mem.span(cmd.split)) |arg| if (arg) |a| {
@@ -53,7 +77,7 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
 
     const coms = std.fs.File{ .handle = cmd.coms[1] };
 
-    const func:*const fn (*Term, [][]const u8, std.fs.File) anyerror!void = switch (name) {
+    const func:*const fn (*Term, [][]const u8, std.fs.File) Errors!void = switch (name) {
         .cd => cd,
         .history => history,
         .@":" => no_op,
@@ -72,6 +96,7 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
         try print(.err, "{t}", .{e});
         return e;
     };
+    std.process.exit(0);
 }
 
 pub fn cd(term:*Term, argv:[][]const u8, coms:std.fs.File) !void {
@@ -105,10 +130,12 @@ pub fn history(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
 
 pub fn no_op(_:*Term, _:[][]const u8, _:std.fs.File) !void {}
 
-pub fn eval(term:*Term, argv:[][]const u8, _:std.fs.File) anyerror!void {
+pub fn eval(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
     const joined = try std.mem.join(term.alloc, " ", @constCast(argv[1..]));
     defer term.alloc.free(joined);
-    _ = try exec.parse_and_run(joined, term);
+    _ = exec.parse_and_run(joined, term) catch |e| {
+        try print(.err, "failed to eval: {t}", .{e});
+    };
 }
 
 pub fn set_opt(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {
