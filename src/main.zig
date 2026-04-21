@@ -66,8 +66,14 @@ pub fn main() !void {
         const colorized = try parser.colorize(&term, line.items);
         const ps1_char:u8 = if (exit_code == 0 and colorized.cmd_ok) '?' else '!';
 
+        const ps1 = try term.build_ps1(ps1_char);
+        var newline_count:isize = @intCast(std.mem.count(u8, ps1, "\n"));
+        if (newline_count > 0) {
+            while (newline_count > 0) : (newline_count -= 1)
+                _ = try stdout.write("\x1b[A");
+        }
         try stdout.print("{s}\x1b[s {s}\x1b[u\x1b[{d}C", .{
-            try term.build_ps1(ps1_char),
+            ps1,
             colorized.line,
             pos + 1,
         });
@@ -136,6 +142,7 @@ pub fn main() !void {
                 line.clearAndFree(alloc);
                 term.mk_raw() catch |e| @panic(@errorName(e));
                 _ = stdout.write("\r\n") catch {};
+                if (ps1[0] == '\n') _ = stdout.writeByte('\n') catch {};
             }
             _ = try stdout.write("\r\n");
             try stdout.flush();
