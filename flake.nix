@@ -41,11 +41,8 @@
 
         # Nix shell
         devShells.default = pkgs.mkShell {
-          # environment variables
-          #REPO_ROOT = repo_root;
-          
           # install packages
-          packages = [ zig ]; # this language too
+          packages = [ zig ];
         };
       })
     );

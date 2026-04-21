@@ -1,4 +1,5 @@
 const std = @import("std");
+const zeit = @import("zeit");
 const parser = @import("parser.zig");
 const exec = @import("exec.zig");
 const globs = @import("globs.zig");
