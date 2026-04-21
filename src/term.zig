@@ -427,6 +427,7 @@ pub const Term = struct {
             }
             try res.append(self.alloc, resolved[i]);
         }
+        try res.appendSlice(self.alloc, "\x1b[0m");
         return try res.toOwnedSlice(self.alloc);
     }
 };
