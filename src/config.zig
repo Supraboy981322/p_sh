@@ -106,9 +106,10 @@ pub fn read(term:*Term) !void {
             },
             '[' => {
                 const key_name = try key.toOwnedSlice(alloc);
-                category = std.meta.stringToEnum(Categories, key_name) orelse {
-                    std.debug.panic("invalid category: {s}\n", .{key_name});
-                    unreachable;
+                category = std.meta.stringToEnum(Categories, key_name) orelse blk: {
+                    term.print_error("invalid category: {s}\n", .{key_name});
+                    while (reader.takeByte() catch null) |c| if (c == ']') break;
+                    break :blk null;
                 };
                 alloc.free(key_name);
                 value.clearAndFree(alloc);
