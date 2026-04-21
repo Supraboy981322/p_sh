@@ -391,7 +391,19 @@ pub fn resolve_string(alloc:std.mem.Allocator, in:[]u8, term:*Term) ![]u8 {
     while (i < in.len) : (i += 1) {
         const b = in[i];
         if (esc) {
-            try res.append(term.alloc, b);
+            try res.append(
+                alloc, switch (b) {
+                    'n' => '\n',
+                    'r' => '\r',
+                    'e' => '\x1b',
+                    'v' => std.ascii.control_code.vt,
+                    'f' => std.ascii.control_code.ff,
+                    else => blk:{
+                        try res.append(alloc, '\\');
+                        break :blk b;
+                    },
+                }
+            );
             esc = false;
             continue;
         }
