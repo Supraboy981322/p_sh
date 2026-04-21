@@ -387,9 +387,15 @@ pub const Term = struct {
         defer res.deinit(self.alloc);
 
         var i:usize = 0;
+        var esc:bool = false;
         while (i < resolved.len) : (i += 1) {
+            if (esc) {
+                esc = false;
+                try res.append(self.alloc, resolved[i]);
+                continue;
+            }
             switch (resolved[i]) {
-                '{' => if (resolved[i+1] != '{') {
+                '{' => if (resolved[i+1] != '{' and !esc) {
                     i += 1;
                     const start:usize = i;
                     while (resolved[i] != '}') : (i += 1) {}
@@ -405,7 +411,7 @@ pub const Term = struct {
                         .CHAR => try res.appendSlice(self.alloc, ps1_char_colorized),
                     }
                     continue;
-                },
+                } else { esc = true; continue; },
                 else => {},
             }
             try res.append(self.alloc, resolved[i]);
