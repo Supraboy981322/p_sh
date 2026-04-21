@@ -377,9 +377,6 @@ pub const Term = struct {
             }
         );
 
-        for (ps1_char_colorized) |b|
-            std.debug.print("{x} |{c}|\n", .{b, b});
-
         const raw = self.env.get("PS1") orelse
             "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{CWD}\x1b[3;36m]"
                 ++ "(\x1b[0m{CHAR}\x1b[3;36m):\x1b[0m";
