@@ -1,7 +1,7 @@
 const std = @import("std");
 const Term = @import("term.zig").Term;
 
-const Categories = enum{ aliases, general };
+const Categories = enum{ aliases, general, env };
 
 pub fn read(term:*Term) !void {
 
@@ -36,28 +36,40 @@ pub fn read(term:*Term) !void {
 
     loop: while (reader.takeByte() catch null) |b| {
         if (std.ascii.isWhitespace(b) and string == 0 and !esc) {
-            if (value.items.len > 0) if (category) |cat| switch (cat) {
-                .aliases => {
-                    try aliases.put(
+            if (value.items.len > 0) if (category) |cat| {
+                switch (cat) {
+                    .aliases => try aliases.put(
                         try key.toOwnedSlice(alloc),
                         try value.toOwnedSlice(alloc)
-                    );
-                    key.clearAndFree(alloc);
-                    value.clearAndFree(alloc);
-                    key_or_value = .KEY;
-                },
-                .general => {
-                    term.config.set(term, key.items, value.items);
-                    key.clearAndFree(alloc);
-                    value.clearAndFree(alloc);
-                    key_or_value = .KEY;
-                },
+                    ),
+
+                    .general => term.config.set(
+                        term, key.items, value.items
+                    ),
+
+                    .env => {
+                        try term.env.put(
+                            key.items, value.items
+                        );
+                    },
+                }
+                key.clearAndFree(alloc);
+                value.clearAndFree(alloc);
+                key_or_value = .KEY;
             } else
                 term.print_error("unexpected bytes in config: {s}", .{value.items});
             continue :loop;
         }
 
-        if (string != 0) {
+        if (esc) {
+            esc = false;
+            switch (b) {
+                'n', 'r', 'v', 'f' => {
+                    try value.appendSlice(alloc, &.{ '\\', b });
+                },
+                else => try value.append(alloc, b),
+            }
+        } else if (string != 0) {
             switch (b) {
                 '\\' => {
                     esc = true;
