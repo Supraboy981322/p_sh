@@ -398,6 +398,7 @@ pub const Term = struct {
             switch (resolved[i]) {
                 '}' => {
                     if (resolved[i+1] == '}' and !esc) esc = true;
+                    continue;
                 },
                 '{' => if (resolved[i+1] != '{' and !esc) {
                     i += 1;
