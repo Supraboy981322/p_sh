@@ -212,7 +212,13 @@ pub fn parse_and_run(
                 error.FileNotFound => error.CommandNotFound,
                 else => err,
             };
+
             final.code = hlp.determine_exit_code(final.err.?);
+
+            for ([_][]const u8{
+                "code:", @constCast(&[_]u8{final.code})
+            }) |chunk|
+                _ = try std.posix.write(cmd.coms[1], chunk);
 
             term.print_error(
                 "failed to run command: {?s} ({t})",
@@ -256,10 +262,13 @@ pub fn parse_and_run(
             if (buf.items[buf.items.len - 1] == '\n')
                 _ = buf.pop();
             const stuff = try @import("coms.zig").parse(buf.items);
-            if (stuff.action == .EXIT)
-                final.quit = true
-            else
-                try term.action(stuff);
+            switch (stuff.action) {
+                .EXIT => final.quit = true,
+                .code => final.code = stuff.stuff[0],
+                else => term.action(stuff) catch |e| {
+                    final.code = hlp.determine_exit_code(e);
+                },
+            }
         }
     };
     
