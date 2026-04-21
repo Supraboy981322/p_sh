@@ -367,4 +367,51 @@ pub const Term = struct {
             .EXIT, .code => unreachable,
         }
     }
+
+    pub fn build_ps1(self:*Term, ps1_char:u8) ![]u8 {
+        const ps1_char_colorized = try std.fmt.allocPrint(
+            self.alloc, "\x1b[3{d}m{c}\x1b[0m",
+            .{
+                @as(u2, if (ps1_char == '!') 1 else 2),
+                ps1_char,
+            }
+        );
+
+        for (ps1_char_colorized) |b|
+            std.debug.print("{x} |{c}|\n", .{b, b});
+
+        const raw = self.env.get("PS1") orelse
+            "\x1b[0m\r\x1b[2K\x1b[3;36m[\x1b[35m{CWD}\x1b[3;36m]"
+                ++ "(\x1b[0m{CHAR}\x1b[3;36m):\x1b[0m";
+        const resolved = try parser.resolve_string(self.alloc, @constCast(raw), self);
+
+        var res = try std.ArrayList(u8).initCapacity(self.alloc, 0);
+        defer res.deinit(self.alloc);
+
+        var i:usize = 0;
+        while (i < resolved.len) : (i += 1) {
+            switch (resolved[i]) {
+                '{' => if (resolved[i+1] != '{') {
+                    i += 1;
+                    const start:usize = i;
+                    while (resolved[i] != '}') : (i += 1) {}
+                    const Valid = enum {
+                        CHAR, CWD, @"_",
+                    };
+                    const foo = std.meta.stringToEnum(Valid, resolved[start..i]) orelse .@"_";
+                    switch (foo) {
+                        .@"_" => {},
+                        .CWD => {
+                            try res.appendSlice(self.alloc, try self.pretty_path());
+                        },
+                        .CHAR => try res.appendSlice(self.alloc, ps1_char_colorized),
+                    }
+                    continue;
+                },
+                else => {},
+            }
+            try res.append(self.alloc, resolved[i]);
+        }
+        return try res.toOwnedSlice(self.alloc);
+    }
 };
