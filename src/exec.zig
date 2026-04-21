@@ -83,10 +83,6 @@ pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
     for (res.items) |*cmd| {
         defer i += 1;
         cmd.split = try parser.split_args(cmd.raw, term);
-        if (std.meta.stringToEnum(Builtins, std.mem.span(cmd.split[0].?))) |_| {
-            cmd.is_builtin = true;
-            cmd.coms = try std.posix.pipe();
-        }
 
         const pipe_details = cmd.opts.pipe_details;
         if (pipe_details.file.do) {
@@ -156,7 +152,6 @@ pub fn parse_and_run(
     if (!try populate_fd_sets(term, &res))
         return .{ .code = 2, .quit = false };
 
-    
     //start each command
     for (res.items, 0..) |*cmd, i| {
         // TODO: should I just move this out of the loop,
@@ -171,6 +166,10 @@ pub fn parse_and_run(
         const matched_builtin = std.meta.stringToEnum(
             Builtins, std.mem.span(cmd.split[0].?)
         );
+        if (matched_builtin) |_| {
+            cmd.is_builtin = true;
+            cmd.coms = try std.posix.pipe();
+        }
 
         cmd.pid = try std.posix.fork();
         if (cmd.pid == 0) {
