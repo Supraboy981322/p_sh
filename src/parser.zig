@@ -402,7 +402,7 @@ pub fn resolve_string(alloc:std.mem.Allocator, in:[]u8, term:*Term) ![]u8 {
                 defer term.alloc.free(name);
                 try res.appendSlice(term.alloc, term.env.get(name) orelse " ");
             },
-            else => try res.appendSlice(term.alloc, b),
+            else => try res.append(term.alloc, b),
         }
     }
     return try res.toOwnedSlice(alloc);
