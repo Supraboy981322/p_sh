@@ -245,8 +245,7 @@ pub fn parse_and_run(
 
     //close file descriptors (they're duped in forked processes)
      for (res.items) |*cmd| {
-        if (cmd.is_builtin)
-            std.posix.close(cmd.coms[1]);
+        std.posix.close(cmd.coms[1]);
         if (cmd.opts.pipe_details.out) {
             std.posix.close(cmd.fd_set[0]);
             std.posix.close(cmd.fd_set[1]);
@@ -271,9 +270,9 @@ pub fn parse_and_run(
                 },
             }
         }
-    };
+    } else
+        std.posix.close(cmd.coms[0]);
     
-
     //wait for each command to finish
     for (res.items) |cmd| if (cmd.opts.wait) {
         const result = std.posix.waitpid(cmd.pid, 0);
