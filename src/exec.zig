@@ -172,6 +172,7 @@ pub fn parse_and_run(
         cmd.coms = try std.posix.pipe();
         cmd.pid = try std.posix.fork();
         if (cmd.pid == 0) {
+            std.posix.close(cmd.coms[0]);
             defer {
                 std.posix.close(cmd.coms[1]);
                 std.posix.abort();
@@ -195,7 +196,6 @@ pub fn parse_and_run(
                 @panic(@errorName(e));
 
             for (res.items) |com| {
-                std.posix.close(com.coms[0]);
                 if (com.opts.pipe_details.out) {
                     std.posix.close(com.fd_set[0]);
                     std.posix.close(com.fd_set[1]);
