@@ -395,6 +395,9 @@ pub const Term = struct {
                 continue;
             }
             switch (resolved[i]) {
+                '}' => {
+                    if (resolved[i+1] == '}' and !esc) esc = true;
+                },
                 '{' => if (resolved[i+1] != '{' and !esc) {
                     i += 1;
                     const start:usize = i;

@@ -413,6 +413,9 @@ pub fn resolve_string(alloc:std.mem.Allocator, in:[]u8, term:*Term) ![]u8 {
                 const name = try seek_var_name(term.alloc, in, &i);
                 defer term.alloc.free(name);
                 try res.appendSlice(term.alloc, term.env.get(name) orelse " ");
+                // HACK: temporary hack, solves a problem with ansi codes
+                //  immediately following variable name
+                if (!std.ascii.isAlphanumeric(in[i])) i -= 1;
             },
             else => try res.append(term.alloc, b),
         }
