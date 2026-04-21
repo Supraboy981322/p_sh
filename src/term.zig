@@ -409,6 +409,13 @@ pub const Term = struct {
                             try res.appendSlice(self.alloc, try self.pretty_path());
                         },
                         .char => try res.appendSlice(self.alloc, ps1_char_colorized),
+                        .time => {
+                            const now = try zeit.instant(.{});
+                            const local = try zeit.local(self.alloc, &self.env);
+                            const now_local = now.in(&local);
+                            const dt = now_local.time();
+                            try dt.gofmt(res.writer(self.alloc), "03:04pm");
+                        },
                     }
                     continue;
                 } else { esc = true; continue; },
