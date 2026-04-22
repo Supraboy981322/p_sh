@@ -2,6 +2,7 @@ const std = @import("std");
 const hlp = @import("helpers.zig");
 const exec = @import("exec.zig");
 const globs = @import("globals.zig");
+const globbing = @import("globbing.zig");
 
 const Cmd = exec.Cmd;
 const Term = @import("term.zig").Term;
@@ -34,7 +35,7 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
             0,
             0,
             false,
-            false
+            false,
         };
 
     loop: while (i < in.len) : (i += 1) {
@@ -92,10 +93,24 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
             },
 
             ' ', '\n', '\r', '\t' => if (str_type == 0) if (mem.items.len > 0) {
+                const no_sentenial = try alloc.dupe(u8, mem.items);
                 try mem.append(alloc, 0);
                 const slice = try mem.toOwnedSlice(alloc);
-                try res.append(alloc, slice[0 .. slice.len - 1 :0].ptr);
                 mem.clearAndFree(alloc);
+
+                // TODO: this is a stupid and very neive implementation;
+                //  a refactor of arg splitting is needed to properly do this
+                if (globbing.match(term, no_sentenial)) |matches| for (matches) |match| {
+                    try res.append(alloc, (try alloc.dupeZ(u8, match)).ptr);
+                } else {} else |err| switch (err) {
+                    error.NoMatches => try res.append(alloc, slice[0 .. slice.len - 1 :0].ptr),
+                    inline else => |e| {
+                        try term.stderr_file.writeAll(
+                            "\n\nfailed to match glob (parser): " ++ @errorName(e) ++ "\n\n"
+                        );
+                    },
+                }
+
             } else {} else
                 try mem.append(alloc, b),
 
@@ -103,9 +118,23 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
         }
     }
     if (mem.items.len > 0) {
+        const no_sentenial = try alloc.dupe(u8, mem.items);
         try mem.append(alloc, 0);
         const slice = try mem.toOwnedSlice(alloc);
-        try res.append(alloc, slice[0 .. slice.len - 1 :0].ptr);
+        mem.clearAndFree(alloc);
+
+        // TODO: this is a stupid and very neive implementation;
+        //  a refactor of arg splitting is needed to properly do this
+        if (globbing.match(term, no_sentenial)) |matches| for (matches) |match| {
+            try res.append(alloc, (try alloc.dupeZ(u8, match)).ptr);
+        } else {} else |err| switch (err) {
+            error.NoMatches => try res.append(alloc, slice[0 .. slice.len - 1 :0].ptr),
+            inline else => |e| {
+                try term.stderr_file.writeAll(
+                    "\n\nfailed to match glob (parser): " ++ @errorName(e) ++ "\n\n"
+                );
+            },
+        }
     }
     try res.append(alloc, null);
     return @ptrCast((try res.toOwnedSlice(alloc)).ptr);
