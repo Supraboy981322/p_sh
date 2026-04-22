@@ -14,6 +14,7 @@ pub fn build(b: *std.Build) void {
 
     for ([_][]const u8{
         "zeit",
+        "glob",
     }) |dep|
         add_dep(b, bin, dep);
 
