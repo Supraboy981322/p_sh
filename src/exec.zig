@@ -97,13 +97,13 @@ pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
                     _ = try file.write(content);
                     break :b file.handle;
                 } else if (pipein)
-                    (try term.cwd().openFile(pipe_details.file.name, .{})).handle
+                    (try (try term.cwd()).openFile(pipe_details.file.name, .{})).handle
                 else
                     term.stdin_file.handle;
 
             const out_fd =
                 if (cmd.opts.pipe_details.file.in_or_out == .OUT)
-                    (try term.cwd().createFile(pipe_details.file.name, .{
+                    (try (try term.cwd()).createFile(pipe_details.file.name, .{
                         .truncate = !pipe_details.file.append,
                         .read = true,
                     })).handle

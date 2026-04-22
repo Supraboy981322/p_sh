@@ -60,6 +60,8 @@ pub const Errors = error {
     DiskQuota,
     NotOpenForWriting,
     MessageTooBig,
+    InvalidUtf8,
+    FileLocksNotSupported,
 };
 
 pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {

@@ -14,7 +14,7 @@ pub fn read(term:*Term) !void {
         break :b buf[0..wr.end];
     };
 
-    var config_file = try term.cwd().openFile(config_path, .{});
+    var config_file = try (try term.cwd()).openFile(config_path, .{});
     var buf:[1024]u8 = undefined;
     var reader = &@constCast(&config_file.reader(&buf)).interface;
     defer config_file.close();

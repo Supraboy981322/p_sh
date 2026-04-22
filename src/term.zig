@@ -190,12 +190,12 @@ pub const Term = struct {
         const old = try self.cwd_path(self.alloc);
         defer self.alloc.free(old);
         try self.env.put("OLDPWD", old);
-        const dir = self.cwd().realpathAlloc(self.alloc, path) catch |e| {
+        const dir = (try self.cwd()).realpathAlloc(self.alloc, path) catch |e| {
             self.print_error("{t}", .{e});
             return e;
         };
         defer self.alloc.free(dir);
-        @constCast(&(std.fs.openDirAbsolute(dir, .{}) catch |e| {
+        @constCast(&(std.fs.openDirAbsolute(dir, .{ .iterate = true }) catch |e| {
             self.print_error("{t}", .{e});
             return e;
         })).setAsCwd() catch |e| {
@@ -209,13 +209,13 @@ pub const Term = struct {
             );
     }
 
-    pub fn cwd(self:*Term) std.fs.Dir {
+    pub fn cwd(self:*Term) !std.fs.Dir {
         _ = self;
-        return std.fs.cwd();
+        return try std.fs.cwd().openDir(".", .{ .iterate = true });
     }
 
     pub fn cwd_path(self:*Term, alloc:std.mem.Allocator) ![]u8 {
-        return try self.cwd().realpathAlloc(alloc, ".");
+        return (try self.cwd()).realpathAlloc(alloc, ".");
     }
 
     pub fn deinit(self:*Term) void {
@@ -265,7 +265,7 @@ pub const Term = struct {
     }
     
     pub fn pretty_path(self:*Term) ![]u8 {
-        const raw = try self.cwd().realpathAlloc(self.alloc, ".");
+        const raw = try (try self.cwd()).realpathAlloc(self.alloc, ".");
         const home = self.env.get("HOME") orelse return raw;
         if (std.mem.startsWith(u8, raw, home)) {
             defer self.alloc.free(raw);
