@@ -12,13 +12,12 @@ pub fn build(b: *std.Build) void {
     });
 
 
-    const zeit_dep = b.dependency("zeit", .{
-        .target = b.graph.host,
-    });
-    const zeit = zeit_dep.module("zeit");
+    for ([_][]const u8{
+        "zeit",
+    }) |dep|
+        add_dep(b, bin, dep);
 
     b.installArtifact(bin);
-    bin.root_module.addImport("zeit", zeit);
 
     //for 'zig build run'
     const run_bin = b.addRunArtifact(bin);
@@ -27,4 +26,12 @@ pub fn build(b: *std.Build) void {
     }
     const run_step = b.step("run", "run the program");
     run_step.dependOn(&run_bin.step);
+}
+
+fn add_dep(b:*std.Build, bin:*std.Build.Step.Compile, name:[]const u8) void {
+    const dep = b.dependency(name, .{
+        .target = b.graph.host,
+    });
+    const mod = dep.module(name);
+    bin.root_module.addImport(name, mod);
 }
