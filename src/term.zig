@@ -2,7 +2,7 @@ const std = @import("std");
 const zeit = @import("zeit");
 const parser = @import("parser.zig");
 const exec = @import("exec.zig");
-const globs = @import("globs.zig");
+const globs = @import("globals.zig");
 const hlp = @import("helpers.zig");
 const State = @import("state.zig").State;
 

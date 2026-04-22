@@ -1,5 +1,5 @@
 const std = @import("std");
-const globs = @import("globs.zig");
+const globs = @import("globals.zig");
 const hlp = @import("helpers.zig");
 const Term = @import("term.zig").Term;
 

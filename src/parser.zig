@@ -1,7 +1,7 @@
 const std = @import("std");
 const hlp = @import("helpers.zig");
 const exec = @import("exec.zig");
-const globs = @import("globs.zig");
+const globs = @import("globals.zig");
 
 const Cmd = exec.Cmd;
 const Term = @import("term.zig").Term;

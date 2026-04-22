@@ -1,5 +1,5 @@
 const std = @import("std");
-const globs = @import("globs.zig");
+const globs = @import("globals.zig");
 const parser = @import("parser.zig");
 const builtins = @import("builtins.zig");
 const hlp = @import("helpers.zig");
