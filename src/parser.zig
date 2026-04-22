@@ -63,9 +63,7 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
                 },
                 else => {},
             }
-        } else if (
-            hlp.contains(globs.non_const_separators, b) and str_type == 0
-        ) {
+        } else if (hlp.contains(globs.non_const_separators, b) and str_type == 0) {
             start_of_thing = true;
         }
 
