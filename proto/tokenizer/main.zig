@@ -9,7 +9,7 @@ pub fn main() !void {
     const alloc = gpa.allocator();
 
     const code =
-        \\echo foo "foo bar" z* flake*
+        \\echo foo    "foo bar" z* flake*;echo "bar"
     ;
 
     var split = try args.split(alloc, @constCast(code));
