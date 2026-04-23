@@ -8,6 +8,7 @@ pub const Cmd = struct {
         alloc.free(self.name);
         for (self.args) |*arg|
             @constCast(arg).free(alloc);
+        alloc.free(self.args);
     }
 };
 

@@ -46,7 +46,7 @@ pub fn split(alloc:std.mem.Allocator, src:[]u8) ![]Cmd {
                         var new = try alloc.alloc(Token, cmd.args.len + 1);
                         for (cmd.args, 0..) |arg, j|
                             new[j] = arg;
-                        new[cmd.args.len] = new_arg; 
+                        new[cmd.args.len] = new_arg;
                         @constCast(cmd).args = new;
                         try res.append(alloc, cmd.*);
                     } else {
@@ -90,7 +90,7 @@ pub fn split(alloc:std.mem.Allocator, src:[]u8) ![]Cmd {
         }
     }
 
-    return res.toOwnedSlice(alloc);
+    return try res.toOwnedSlice(alloc);
 }
 
 fn can_glob(thing:[]u8) bool {
@@ -100,53 +100,36 @@ fn can_glob(thing:[]u8) bool {
     return true;
 }
 
-//in-place globbing (no new []Cmd, just modifies the arg slices)
+//for each Cmd in []Cmd, creates new []Token with globs expanded,
+//  and replaces Cmd's .args field with new (expanded) []Token
 pub fn glob(alloc:std.mem.Allocator, commands:*[]Cmd) !void {
-    for (commands.*) |*cmd| for (cmd.args, 0..) |*arg, i| if (can_glob(arg.value.string.value)) {
-        const pattern = arg.value.string.value;
-        if (glob_lib.validate(pattern)) |_| {
-            var arr = try alloc.alloc(Token, cmd.args[0..i].len);
-            if (arr.len < 1) {
-                alloc.free(arr);
-                continue;
-            }
+    for (commands.*) |*cmd| {
+        var res = try std.ArrayList(Token).initCapacity(alloc, 0);
+        defer _ = res.deinit(alloc);
+        for (cmd.args) |*arg| if (can_glob(arg.value.string.value)) {
+            const pattern = arg.value.string.value;
+            if (glob_lib.validate(pattern)) |_| {
 
-            for (cmd.args[0..i], 0..) |a, j|
-                arr[j] = a;
-
-            const maybe_matches = match(alloc, pattern) catch |e| switch (e) {
-                error.NoMatches => null,
-                else => return e,
-            };
-            if (maybe_matches) |matches| {
+                const matches = match(alloc, pattern) catch |e| switch (e) {
+                    error.NoMatches => {
+                        try res.append(alloc, arg.*);
+                        continue;
+                    },
+                    else => return e,
+                };
                 defer alloc.free(matches);
+
                 @constCast(arg).free(alloc);
-
-                var new = try alloc.alloc(Token, arr.len + matches.len - 1);
-                for (arr, 0..) |a, j|
-                    new[j] = a;
-                for (matches, arr.len - 1..) |m, j|
-                    new[j] = .{ .value = .{ .string = .{ .value = m } } };
-
-                alloc.free(arr);
-                arr = new;
-            } else
-                arr[arr.len-1] = arg.*;
-
-            if (cmd.args[i..].len > 1) {
-                var new = try alloc.alloc(Token, arr.len + cmd.args[i..].len);
-                for (arr, 1..) |a, j|
-                    new[j] = a;
-                for (cmd.args[i..], arr.len-1..) |a, j|
-                    new[j] = a;
-                arr = new[0..new.len-1];
-            }
-
-            @constCast(cmd).args = arr;
-        } else |err| {
-            std.debug.print("{t}\n", .{err});
-        }
-    };
+                for (matches) |m|
+                    try res.append(alloc, .{ .value = .{ .string = .{ .value = m } } });
+            } else |err|
+                std.debug.print("{t}\n", .{err});
+        } else {
+            try res.append(alloc, arg.*);
+        };
+        alloc.free(cmd.args);
+        cmd.args = try res.toOwnedSlice(alloc);
+    }
 }
 
 pub fn match(alloc:std.mem.Allocator, pattern:[]u8) ![][]u8 {
