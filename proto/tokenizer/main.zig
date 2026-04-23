@@ -20,8 +20,15 @@ pub fn main() !void {
     }
 
     std.debug.print("\n==== split ====\n", .{});
-    for (split) |cmd| for (cmd.args) |arg|
-        std.debug.print("|{s}|\n", .{arg.value.string.value});
+    for (split) |cmd| {
+        std.debug.print("|{s}|\n", .{cmd.name});
+        for (cmd.args) |arg| {
+            if (arg.value == .string)
+                std.debug.print("\t|{s}|\n", .{arg.value.string.value})
+            else
+                std.debug.print("\tnot string: {any}\n", .{arg.value});
+        }
+    }
 
 
     try args.glob(alloc, &split);
