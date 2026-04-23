@@ -47,6 +47,8 @@ pub fn split(alloc:std.mem.Allocator, src:[]u8) ![]Cmd {
                         for (cmd.args, 0..) |arg, j|
                             new[j] = arg;
                         new[cmd.args.len] = new_arg;
+                        if (cmd.args.len > 1)
+                            alloc.free(cmd.args);
                         @constCast(cmd).args = new;
                         try res.append(alloc, cmd.*);
                     } else {
@@ -78,6 +80,7 @@ pub fn split(alloc:std.mem.Allocator, src:[]u8) ![]Cmd {
             for (cmd.args, 0..) |arg, j|
                 new[j] = arg;
             new[cmd.args.len] = new_arg;
+            alloc.free(cmd.args);
             @constCast(cmd).args = new;
             try res.append(alloc, cmd.*);
         } else {
