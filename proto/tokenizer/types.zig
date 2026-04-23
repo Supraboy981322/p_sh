@@ -3,6 +3,13 @@ const std = @import("std");
 pub const Cmd = struct {
     name:[]u8,
     args:[]Token,
+    is_skeleton:bool = false,
+
+    pub const skeleton:Cmd = .{
+        .name = "",
+        .args = &.{},
+        .is_skeleton = true,
+    };
 
     pub fn free(self:*Cmd, alloc:std.mem.Allocator) void {
         alloc.free(self.name);

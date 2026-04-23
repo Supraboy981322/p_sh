@@ -33,31 +33,44 @@ pub fn split(alloc:std.mem.Allocator, src:[]u8) ![]Cmd {
                     string_type = b;
             },
 
-            ' ' =>
+            ' ', ';', '&', '|' =>
                 if (string_type == 0) {
-                    const new_arg:Token = .{
-                        .value = .{
-                            .string = .{
-                                .value = try mem.toOwnedSlice(alloc)
+                    if (mem.items.len > 0) {
+                        const new_arg:Token = .{
+                            .value = .{
+                                .string = .{
+                                    .value = try mem.toOwnedSlice(alloc)
+                                },
                             },
-                        },
-                    };
-                    if (res.pop()) |*cmd| {
-                        var new = try alloc.alloc(Token, cmd.args.len + 1);
-                        for (cmd.args, 0..) |arg, j|
-                            new[j] = arg;
-                        new[cmd.args.len] = new_arg;
-                        if (cmd.args.len > 1)
-                            alloc.free(cmd.args);
-                        @constCast(cmd).args = new;
-                        try res.append(alloc, cmd.*);
-                    } else {
-                        try res.append(alloc, .{
-                            .name = try alloc.dupe(u8, new_arg.value.string.value),
-                            .args = @constCast(&[_]Token{
-                                new_arg,
-                            }),
-                        });
+                        };
+                        if (res.pop()) |*cmd| {
+                            if (cmd.is_skeleton) {
+                                @constCast(cmd).name = try alloc.dupe(u8, cmd.name);
+                                @constCast(cmd).is_skeleton = false;
+                            }
+                            var new = try alloc.alloc(Token, cmd.args.len + 1);
+                            for (cmd.args, 0..) |arg, j|
+                                new[j] = arg;
+                            new[cmd.args.len] = new_arg;
+                            if (cmd.args.len > 1)
+                                alloc.free(cmd.args);
+                            @constCast(cmd).args = new;
+                            try res.append(alloc, cmd.*);
+                        } else {
+                            try res.append(alloc, .{
+                                .name = try alloc.dupe(u8, new_arg.value.string.value),
+                                .args = @constCast(&[_]Token{
+                                    new_arg,
+                                }),
+                            });
+                        }
+                    }
+                    if (std.mem.count(u8, &.{ ';', '&', '|' }, &.{ b }) > 0) {
+                        if (res.getLastOrNull()) |previous| {
+                            if (previous.is_skeleton) continue;
+                        }
+                        try res.append(alloc, .skeleton);
+                        continue;
                     }
                 },
 
@@ -76,11 +89,16 @@ pub fn split(alloc:std.mem.Allocator, src:[]u8) ![]Cmd {
             },
         };
         if (res.pop()) |*cmd| {
+            if (cmd.is_skeleton) {
+                @constCast(cmd).name = try alloc.dupe(u8, cmd.name);
+                @constCast(cmd).is_skeleton = false;
+            }
             var new = try alloc.alloc(Token, cmd.args.len + 1);
             for (cmd.args, 0..) |arg, j|
                 new[j] = arg;
             new[cmd.args.len] = new_arg;
-            alloc.free(cmd.args);
+            if (cmd.args.len > 1)
+                alloc.free(cmd.args);
             @constCast(cmd).args = new;
             try res.append(alloc, cmd.*);
         } else {
@@ -127,9 +145,9 @@ pub fn glob(alloc:std.mem.Allocator, commands:*[]Cmd) !void {
                     try res.append(alloc, .{ .value = .{ .string = .{ .value = m } } });
             } else |err|
                 std.debug.print("{t}\n", .{err});
-        } else {
+        } else
             try res.append(alloc, arg.*);
-        };
+
         alloc.free(cmd.args);
         cmd.args = try res.toOwnedSlice(alloc);
     }
