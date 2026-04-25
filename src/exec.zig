@@ -3,6 +3,7 @@ const globs = @import("globals.zig");
 const parser = @import("parser.zig");
 const builtins = @import("builtins.zig");
 const hlp = @import("helpers.zig");
+const posix = @import("posix.zig");
 
 const Term = @import("term.zig").Term;
 const peek = parser.peek_no_state;
@@ -10,7 +11,7 @@ const peek = parser.peek_no_state;
 pub const Builtins = builtins.Valid;
 
 const IoOpt = struct {
-    file:?*std.fs.File = null,
+    file:?*std.Io.File = null,
     is_file:bool = false,
     is_pipe:bool = false,
 };
@@ -75,7 +76,7 @@ pub const Cmd = struct {
 pub const ExecResult = struct {
     code:u8,
     quit:bool = false,
-    err:?(builtins.Errors || std.posix.ExecveError) = null
+    err:?(builtins.Errors || std.process.ReplaceError) = null
 };
 
 pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
@@ -93,32 +94,42 @@ pub fn populate_fd_sets(term:*Term, res:*std.ArrayList(Cmd)) !bool {
                     const fd = try std.posix.memfd_create(
                         content, 0 //std.posix.FD_CLOEXEC
                     );
-                    var file = std.fs.File{ .handle = fd };
-                    _ = try file.write(content);
+                    var file = hlp.file_from_fd(fd);
+                    _ = try @constCast(&file.writer(term.io, &.{}).interface).writeAll(content);
                     break :b file.handle;
                 } else if (pipein)
-                    (try (try term.cwd()).openFile(pipe_details.file.name, .{})).handle
+                    (try (try term.cwd()).openFile(term.io, pipe_details.file.name, .{})).handle
                 else
                     term.stdin_file.handle;
 
             const out_fd =
                 if (cmd.opts.pipe_details.file.in_or_out == .OUT)
-                    (try (try term.cwd()).createFile(pipe_details.file.name, .{
+                    (try (try term.cwd()).createFile(term.io, pipe_details.file.name, .{
                         .truncate = !pipe_details.file.append,
                         .read = true,
                     })).handle
                 else if (pipe_details.out) b: {
-                    cmd.fd_set = try std.posix.pipe();
+                    cmd.fd_set = try posix.new_pipe();
                     res.items[i+1].opts.pipe_details.in = true;
                     break :b cmd.fd_set[1];
                 } else
                     term.stdout_file.handle;
 
-            if (pipe_details.file.append)
-                try (std.fs.File{ .handle = out_fd }).seekFromEnd(0);
+            if (pipe_details.file.append) {
+                const code = std.posix.system.lseek(out_fd, 0, std.posix.SEEK.END);
+                switch (std.posix.system.errno(code)) {
+                    .SUCCESS => {},
+                    .BADF => unreachable, // always a race condition
+                    .INVAL => return error.Unseekable,
+                    .OVERFLOW => return error.Unseekable,
+                    .SPIPE => return error.Unseekable,
+                    .NXIO => return error.Unseekable,
+                    else => |err| return std.posix.unexpectedErrno(err),
+                }
+            }
             cmd.fd_set = [2]std.posix.fd_t{ in_fd, out_fd };
         } else if (pipe_details.out) if (res.items.len > i+1) {
-            cmd.fd_set = try std.posix.pipe();
+            cmd.fd_set = try posix.new_pipe();
             res.items[i+1].opts.pipe_details.in = true;
         } else {
             term.print_error("invalid pipe: missing right-hand side", .{}); 
@@ -156,7 +167,7 @@ pub fn parse_and_run(
     for (res.items, 0..) |*cmd, i| {
         // TODO: should I just move this out of the loop,
         //  will it ever change between spawning processes?
-        cmd.envp = try std.process.createEnvironFromMap(alloc, &term.env, .{});
+        cmd.envp = (try term.env.createPosixBlock(alloc, .{})).slice;
 
         _ = cmd.split[0] orelse {
             final.code = 2;
@@ -169,17 +180,17 @@ pub fn parse_and_run(
         if (matched_builtin) |_|
             cmd.is_builtin = true;
 
-        cmd.coms = try std.posix.pipe();
-        cmd.pid = try std.posix.fork();
+        cmd.coms = try posix.new_pipe();
+        cmd.pid = try posix.fork();
         if (cmd.pid == 0) {
-            std.posix.close(cmd.coms[0]);
+            posix.close(cmd.coms[0]);
             defer {
-                std.posix.close(cmd.coms[1]);
-                std.posix.abort();
+                posix.close(cmd.coms[1]);
+                posix.abort();
             }
 
             //stdin
-            std.posix.dup2(
+            std.Io.Threaded.dup2(
                 if (cmd.opts.pipe_details.in and !@constCast(cmd).wants_file_direction(.IN))
                     (&res.items[i - 1]).fd_set[0]
                 else
@@ -189,7 +200,7 @@ pub fn parse_and_run(
                 @panic(@errorName(e));
 
             //stdout
-            std.posix.dup2(
+            std.Io.Threaded.dup2(
                 cmd.fd_set[1],
                 std.posix.STDOUT_FILENO
             ) catch |e|
@@ -197,15 +208,15 @@ pub fn parse_and_run(
 
             for (res.items) |com| {
                 if (com.opts.pipe_details.out) {
-                    std.posix.close(com.fd_set[0]);
-                    std.posix.close(com.fd_set[1]);
+                    posix.close(com.fd_set[0]);
+                    posix.close(com.fd_set[1]);
                 }
             }
 
             const err = if (cmd.is_builtin)
                 builtins.do(term, matched_builtin.?, cmd.*)
             else
-                std.posix.execvpeZ(cmd.split[0].?, cmd.split, cmd.envp);
+                posix.execvpeZ(term, cmd.split[0].?, cmd.split, cmd.envp);
 
             // TODO: figure out how to make these changes reflect in the original process
             //  (fork communicating with the parent)
@@ -219,7 +230,7 @@ pub fn parse_and_run(
             for ([_][]const u8{
                 "code:", @constCast(&[_]u8{final.code})
             }) |chunk|
-                _ = try std.posix.write(cmd.coms[1], chunk);
+                _ = try posix.write(cmd.coms[1], chunk);
 
             term.print_error(
                 "failed to run command: {?s} ({t})",
@@ -227,17 +238,17 @@ pub fn parse_and_run(
             );
 
             if (cmd.opts.pipe_details.in) for (res.items[0..i]) |*proc|
-                std.posix.kill(proc.pid, 9) catch |e|
+                std.posix.kill(proc.pid, @enumFromInt(9)) catch |e|
                     term.print_error(
                         "failed stop chain: {?s} ({t})",
                         .{ cmd.split[0], e }
                     );
 
-            std.posix.exit(final.code);
+            posix.exit(final.code);
         }
         if (!cmd.opts.piped and cmd.opts.wait and !cmd.is_builtin) {
-            const result = std.posix.waitpid(cmd.pid, 0);
-            if (result.status != 0) final.code = 1;
+            const exit_code = posix.waitpid_exit_code(cmd.pid);
+            if (exit_code != 0) final.code = exit_code;
             cmd.opts.wait = false;
         }
         continue;
@@ -245,19 +256,19 @@ pub fn parse_and_run(
 
     //close file descriptors (they're duped in forked processes)
      for (res.items) |*cmd| {
-        std.posix.close(cmd.coms[1]);
+        posix.close(cmd.coms[1]);
         if (cmd.opts.pipe_details.out) {
-            std.posix.close(cmd.fd_set[0]);
-            std.posix.close(cmd.fd_set[1]);
+            posix.close(cmd.fd_set[0]);
+            posix.close(cmd.fd_set[1]);
         }
     }
 
     for (res.items) |*cmd| if (cmd.is_builtin) {
         var buf = try std.ArrayList(u8).initCapacity(term.alloc, 0);
         defer buf.deinit(term.alloc);
-        var reader = &@constCast(&(std.fs.File{ .handle = cmd.coms[0] }).reader(&.{})).interface;
+        var reader = &@constCast(&hlp.file_from_fd(cmd.coms[0]).reader(term.io, &.{})).interface;
         try reader.appendRemainingUnlimited(term.alloc, &buf);
-        std.posix.close(cmd.coms[0]);
+        posix.close(cmd.coms[0]);
         if (buf.items.len > 0) {
             if (buf.items[buf.items.len - 1] == '\n')
                 _ = buf.pop();
@@ -271,14 +282,12 @@ pub fn parse_and_run(
             }
         }
     } else
-        std.posix.close(cmd.coms[0]);
+        posix.close(cmd.coms[0]);
     
     //wait for each command to finish
     for (res.items) |cmd| if (cmd.opts.wait) {
-        const result = std.posix.waitpid(cmd.pid, 0);
-        // TODO: figure out how to properly set this
-        //  (on error, all I get is 256 (regardless of the error))
-        if (result.status != 0) final.code = 1;
+        const exit_code = posix.waitpid_exit_code(cmd.pid);
+        if (exit_code != 0) final.code = exit_code;
     };
 
     return final;

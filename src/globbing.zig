@@ -9,7 +9,7 @@ pub fn match(term:*Term, pattern:[]u8) ![][]u8 {
     defer res.deinit(term.alloc);
 
     var itr = cwd.iterate();
-    while (try itr.next()) |entry| if (glob.match(pattern, entry.name)) {
+    while (try itr.next(term.io)) |entry| if (glob.match(pattern, entry.name)) {
         try res.append(term.alloc, try term.alloc.dupe(u8, entry.name));
     };
 

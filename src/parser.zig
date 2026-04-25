@@ -103,7 +103,7 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
                 } else {} else |err| switch (err) {
                     error.NoMatches => try res.append(alloc, slice[0 .. slice.len - 1 :0].ptr),
                     inline else => |e| {
-                        try term.stderr_file.writeAll(
+                        try term.stderr.writeAll(
                             "\n\nfailed to match glob (parser): " ++ @errorName(e) ++ "\n\n"
                         );
                     },
@@ -128,7 +128,7 @@ pub fn split_args(in:[]u8, term:*Term) ![*:null]const ?[*:0]const u8 {
         } else {} else |err| switch (err) {
             error.NoMatches => try res.append(alloc, slice[0 .. slice.len - 1 :0].ptr),
             inline else => |e| {
-                try term.stderr_file.writeAll(
+                try term.stderr.writeAll(
                     "\n\nfailed to match glob (parser): " ++ @errorName(e) ++ "\n\n"
                 );
             },

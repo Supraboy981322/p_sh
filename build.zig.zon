@@ -1,14 +1,18 @@
 .{
     .name = .p_sh,
-    .version = "0.15.2",
+    .version = "0.16.0",
     .dependencies = .{
-        .zeit = .{
-            .url = "https://github.com/rockorager/zeit/archive/refs/tags/v0.7.0.tar.gz",
-            .hash = "zeit-0.6.0-5I6bk7V8AgAY0-hM-vUYtKZUFYhXct-VRkqISNNTfEfb",
-        },
+        //.zeit = .{
+        //    .url = "https://github.com/rockorager/zeit/archive/refs/tags/v0.7.0.tar.gz",
+        //    .hash = "zeit-0.6.0-5I6bk7V8AgAY0-hM-vUYtKZUFYhXct-VRkqISNNTfEfb",
+        //},
         .glob = .{
             .url = "git+https://github.com/Supraboy981322/glob.zig?ref=master#548e2bd9aa5065fa5f33b8366af6e06aeee08e68",
             .hash = "glob-0.1.0-AymqdII4AACT1lnjBGujzZg1LqSPL0NND3otqsP3XHKa",
+        },
+        .zeit = .{
+            .url = "git+https://github.com/rockorager/zeit?ref=0.16#1b1c95b2282c3003bb79ff6f44d3021ddcb279c1",
+            .hash = "zeit-0.6.0-5I6bk7q6AgBdMJxze3D4l9ylQhkviQ_BX9FigDt13MFn",
         },
     },
     .paths = .{""},

@@ -1,6 +1,7 @@
 const std = @import("std");
 const Term = @import("term.zig").Term;
 const exec = @import("exec.zig");
+const hlp = @import("helpers.zig");
 
 const Cmd = exec.Cmd;
 
@@ -62,6 +63,8 @@ pub const Errors = error {
     MessageTooBig,
     InvalidUtf8,
     FileLocksNotSupported,
+    Canceled,
+    OperationUnsupported,
 };
 
 pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
@@ -77,9 +80,10 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
         try argv.append(alloc, std.mem.span(a));
     };
 
-    const coms = std.fs.File{ .handle = cmd.coms[1] };
+    var coms = &@constCast(&hlp.file_from_fd(cmd.coms[1]).writer(term.io, &.{})).interface;
+    _ = &coms;
 
-    const func:*const fn (*Term, [][]const u8, std.fs.File) Errors!void = switch (name) {
+    const func:*const fn (*Term, [][]const u8, *std.Io.Writer) Errors!void = switch (name) {
         .cd => cd,
         .history => history,
         .@":" => no_op,
@@ -95,17 +99,17 @@ pub fn do(term:*Term, name:Valid, cmd:Cmd) Errors {
 
     };
     func(term, argv.items, coms) catch |e| {
-        try print(.err, "{t}", .{e});
+        try print(term, .err, "{t}", .{e});
         return e;
     };
     std.process.exit(0);
 }
 
-pub fn cd(term:*Term, argv:[][]const u8, coms:std.fs.File) !void {
+pub fn cd(term:*Term, argv:[][]const u8, coms:*std.Io.Writer) !void {
     const target =
         if (argv.len < 2)
             term.env.get("HOME") orelse {
-                try print(.err, "not enough args; need a directory", .{});
+                try print(term, .err, "not enough args; need a directory", .{});
                 return error.NotEnoughArgs;
             }
         else
@@ -114,33 +118,33 @@ pub fn cd(term:*Term, argv:[][]const u8, coms:std.fs.File) !void {
         if (std.mem.eql(u8, target, "-")) b: {
             const current = try term.cwd_path(term.alloc);
             defer term.alloc.free(current);
-            try print(.out, "{s}\n", .{current});
+            try print(term, .out, "{s}\n", .{current});
             break :b try term.alloc.dupe(u8, term.env.get("OLDPWD").?);
         } else
             try term.alloc.dupe(u8, target);
     defer term.alloc.free(dir);
-    _ = try coms.write("chdir:");
-    _ = try coms.write(dir);
+    _ = try coms.writeAll("chdir:");
+    _ = try coms.writeAll(dir);
 }
 
-pub fn history(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
+pub fn history(term:*Term, argv:[][]const u8, _:*std.Io.Writer) !void {
     if (argv.len > 1)
         term.TODO("history command args", .{});
     for (term.hist.arr[0..term.hist.len], 0..) |line, i|
-        try print(.out, "{d}: {s}\n", .{i, line});
+        try print(term, .out, "{d}: {s}\n", .{i, line});
 }
 
-pub fn no_op(_:*Term, _:[][]const u8, _:std.fs.File) !void {}
+pub fn no_op(_:*Term, _:[][]const u8, _:*std.Io.Writer) !void {}
 
-pub fn eval(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
+pub fn eval(term:*Term, argv:[][]const u8, _:*std.Io.Writer) !void {
     const joined = try std.mem.join(term.alloc, " ", @constCast(argv[1..]));
     defer term.alloc.free(joined);
     _ = exec.parse_and_run(joined, term) catch |e| {
-        try print(.err, "failed to eval: {t}", .{e});
+        try print(term, .err, "failed to eval: {t}", .{e});
     };
 }
 
-pub fn set_opt(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {
+pub fn set_opt(_:*Term, argv:[][]const u8, coms:*std.Io.Writer) !void {
     if (argv.len != 3)
         return if (argv.len < 3)
             error.NotEnoughArgs
@@ -149,24 +153,24 @@ pub fn set_opt(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {
     for ([_][]const u8{
         "config:", argv[1], "|", argv[2]
     }) |chunk|
-        _ = try coms.write(chunk);
+        _ = try coms.writeAll(chunk);
 }
 
-pub fn alias(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {
+pub fn alias(_:*Term, argv:[][]const u8, coms:*std.Io.Writer) !void {
     if (argv.len < 3)
         return error.NotEnoughArgs;
     for ([_][]const u8 {
         "alias:", argv[1], "|", argv[2]
     }) |chunk|
-        _ = try coms.write(chunk);
+        _ = try coms.writeAll(chunk);
 }
 
-pub fn reload_config(_:*Term, argv:[][]const u8, coms:std.fs.File) !void {
+pub fn reload_config(_:*Term, argv:[][]const u8, coms:*std.Io.Writer) !void {
     _ = argv;
-    _ = try coms.write("reload:config");
+    _ = try coms.writeAll("reload:config");
 }
 
-pub fn dump(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
+pub fn dump(term:*Term, argv:[][]const u8, _:*std.Io.Writer) !void {
     const ValidArgs = enum {
         env,
         aliases,
@@ -176,7 +180,7 @@ pub fn dump(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
     const thing = std.meta.stringToEnum(
         ValidArgs, if (argv.len < 2) "help" else argv[1]
     ) orelse {
-        try print(.err, "I do not know how to dump {s}, see help", .{argv[1]});
+        try print(term, .err, "I do not know how to dump {s}, see help", .{argv[1]});
         return error.InvalidArgument;
     };
 
@@ -184,39 +188,39 @@ pub fn dump(term:*Term, argv:[][]const u8, _:std.fs.File) !void {
         .env => {
             var itr = term.env.iterator();
             while (itr.next()) |pair| {
-                try print(.out, "{s}={s}\n", .{pair.key_ptr.*, pair.value_ptr.*});
+                try print(term, .out, "{s}={s}\n", .{pair.key_ptr.*, pair.value_ptr.*});
             }
         },
         .aliases => {
             if (term.vars.aliases == null) {
-                try print(.out, "you have no aliases\n", .{});
+                try print(term, .out, "you have no aliases\n", .{});
                 return;
             }
             var itr = term.vars.aliases.?.iterator();
             while (itr.next()) |pair| {
-                try print(.out, "{s}={{\n    {s}\n}}\n\n", .{pair.key_ptr.*, pair.value_ptr.*});
+                try print(term, .out, "{s}={{\n    {s}\n}}\n\n", .{pair.key_ptr.*, pair.value_ptr.*});
             }
         },
         .help, .@"-h", .@"--help" => {
-            try print(.out,
+            try print(term, .out,
                 \\{s} (builtin) -- prints values stored by the shell
                 \\  I know how to dump (valid args):
             ++ "\n", .{argv[0]});
             for (std.meta.tags(ValidArgs)) |tag|
-                try print(.out, "    {t}\n", .{tag});
+                try print(term, .out, "    {t}\n", .{tag});
         },
     }
 }
 
-pub fn exit(_:*Term, _:[][]const u8, coms:std.fs.File) !void {
-    _ = try coms.write("EXIT:0");
+pub fn exit(_:*Term, _:[][]const u8, coms:*std.Io.Writer) !void {
+    _ = try coms.writeAll("EXIT:0");
 }
 
-pub fn print(comptime where:enum { err, out }, comptime msg:[]const u8, args:anytype) !void {
+pub fn print(term:*Term, comptime where:enum { err, out }, comptime msg:[]const u8, args:anytype) !void {
     var file = switch (where) {
-        .err => std.fs.File.stderr(),
-        .out => std.fs.File.stdout(),
+        .err => std.Io.File.stderr(),
+        .out => std.Io.File.stdout(),
     };
-    const writer = &@constCast(&file.writer(&.{})).interface;
+    const writer = &@constCast(&file.writer(term.io, &.{})).interface;
     try writer.print(msg, args);
 }

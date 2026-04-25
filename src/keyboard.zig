@@ -5,14 +5,13 @@ const Term = @import("term.zig").Term;
 
 const peek = @import("parser.zig").peek_no_state;
 
-const stdout = globs.stdout;
-
 const Actions = struct {
     run:bool = false,
     hist_change:isize = 0,
 };
 
 pub fn do(alloc:std.mem.Allocator, term:*Term, line:*std.ArrayList(u8), buf:[]u8, n:usize, pos:*usize) !Actions {
+    var stdout = &@constCast(&std.Io.File.stdout().writer(term.io, &.{})).interface;
     var i:usize = 0;
     var res = Actions{};
     inner: while (i < n) : (i += 1) switch (buf[i]) {

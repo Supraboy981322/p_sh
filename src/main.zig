@@ -5,21 +5,21 @@ const hlp = @import("helpers.zig");
 const keyboard = @import("keyboard.zig");
 const parser = @import("parser.zig");
 
-const stdout = globs.stdout;
-const stderr = globs.stderr;
-
 const peek = @import("parser.zig").peek_no_state;
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    var perm_alloc = gpa.allocator();
+pub fn main(init:std.process.Init) !void {
+    var perm_alloc = init.gpa;
+    var io = init.io;
+    _ = &io;
     
-    var stdin_file = std.fs.File.stdin();
-    var stdout_file =std.fs.File.stdout();
-    var stderr_file =std.fs.File.stdout();
+    var stdin_file = std.Io.File.stdin();
+    var stdout_file = std.Io.File.stdout();
+    var stderr_file = std.Io.File.stdout();
 
-    if (!stdin_file.isTty())
+    var stdout = &@constCast(&stdout_file.writer(init.io, &.{})).interface;
+    var stderr = &@constCast(&stdout_file.writer(init.io, &.{})).interface;
+
+    if (!try stdin_file.isTty(io))
         @panic("TODO: non-tty"); // TODO: non-tty
 
     var hist = try globs.Hist.init(&perm_alloc, 100);
@@ -30,7 +30,7 @@ pub fn main() !void {
         &stdin_file,
         &stderr_file,
         &stdout_file,
-        null,
+        init,
         &hist,
     ); 
 

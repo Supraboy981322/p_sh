@@ -78,3 +78,10 @@ pub fn parse_bool(str:[]u8) !bool {
         else => false,
     };
 }
+
+pub fn file_from_fd(fd:std.posix.fd_t) std.Io.File {
+    return .{
+        .handle = fd,
+        .flags = .{ .nonblocking = false },
+    };
+}

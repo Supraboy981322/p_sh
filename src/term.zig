@@ -4,6 +4,7 @@ const parser = @import("parser.zig");
 const exec = @import("exec.zig");
 const globs = @import("globals.zig");
 const hlp = @import("helpers.zig");
+const posix = @import("posix.zig");
 const State = @import("state.zig").State;
 
 const Hist = globs.Hist;
@@ -13,14 +14,18 @@ pub const Term = struct {
     og:std.os.linux.termios,
     raw:std.os.linux.termios,
 
-    stdin_file:*std.fs.File,
-    stdout_file:*std.fs.File,
-    stderr_file:*std.fs.File,
+    stdin_file:*std.Io.File,
+    stdout_file:*std.Io.File,
+    stderr_file:*std.Io.File,
+    io:std.Io,
+
+    stderr:*std.Io.Writer,
+    stdout:*std.Io.Writer,
 
     coms:[2]std.posix.fd_t,
 
     alloc:std.mem.Allocator,
-    env:std.process.EnvMap,
+    env:std.process.Environ.Map,
 
     permanent_alloc:std.mem.Allocator,
     hist:*Hist,
@@ -86,7 +91,7 @@ pub const Term = struct {
         comptime msg:[]const u8,
         stuff:anytype
     ) void {
-        var stderr = @constCast(&self.stderr_file.writer(&.{})).interface;
+        var stderr = @constCast(&self.stderr_file.writer(self.io, &.{})).interface;
         const altered = "\n" ++ msg ++ "\n";
         stderr.print(altered, stuff) catch
             std.debug.print(altered, stuff);
@@ -122,10 +127,11 @@ pub const Term = struct {
     
     pub fn init(
         alloc:std.mem.Allocator,
-        stdin:*std.fs.File,
-        stderr:*std.fs.File,
-        stdout:*std.fs.File,
-        env:?std.process.EnvMap,
+        stdin:*std.Io.File,
+        stderr:*std.Io.File,
+        stdout:*std.Io.File,
+        //env:?std.process.Environ.Map,
+        stuff:std.process.Init,
         hist:*Hist,
     ) !Term {
         const og = try std.posix.tcgetattr(stdin.handle);
@@ -140,13 +146,16 @@ pub const Term = struct {
             .stdin_file = stdin,
             .stdout_file = stdout,
             .stderr_file = stderr,
+            .stderr = &@constCast(&stderr.writer(stuff.io, &.{})).interface,
+            .stdout = &@constCast(&stdout.writer(stuff.io, &.{})).interface,
+            .io = stuff.io,
             .alloc = alloc,
-            .env = if (env) |e| e else try std.process.getEnvMap(alloc),
+            .env = stuff.environ_map.*,//if (env) |e| e else try std.process.getEnvMap(alloc),
             .permanent_alloc = alloc,
             .hist = hist,
             .config = .{},
             .state = undefined,
-            .coms = try std.posix.pipe(),
+            .coms = try posix.new_pipe(),
         };
 
         res.init_env();
@@ -162,12 +171,11 @@ pub const Term = struct {
             else
                 res.print_error("failed to read config: {t}", .{e});
 
+        var buf:[1024]u8 = undefined;
+        var writer = &@constCast(&stderr.writer(res.io, &buf)).interface;
+
         res.state = State.init(&res) catch |e| {
-            for ([_][]const u8{
-                "failed to init state file: ", @errorName(e), "\n\n"
-            }) |chunk| {
-                _ = stderr.write(chunk) catch {};
-            }
+            try writer.print("failed to init state file: {t}\n\n", .{e});
             return res;
         };
 
@@ -190,15 +198,16 @@ pub const Term = struct {
         const old = try self.cwd_path(self.alloc);
         defer self.alloc.free(old);
         try self.env.put("OLDPWD", old);
-        const dir = (try self.cwd()).realpathAlloc(self.alloc, path) catch |e| {
+        const dir = (try self.cwd()).realPathFileAlloc(self.io, path, self.alloc) catch |e| {
             self.print_error("{t}", .{e});
             return e;
         };
         defer self.alloc.free(dir);
-        @constCast(&(std.fs.openDirAbsolute(dir, .{ .iterate = true }) catch |e| {
+        const opened = std.Io.Dir.openDirAbsolute(self.io, dir, .{ .iterate = true }) catch |e| {
             self.print_error("{t}", .{e});
             return e;
-        })).setAsCwd() catch |e| {
+        };
+        std.process.setCurrentDir(self.io, opened) catch |e| {
             self.print_error("{t}", .{e});
             return e;
         };
@@ -209,17 +218,18 @@ pub const Term = struct {
             );
     }
 
-    pub fn cwd(self:*Term) !std.fs.Dir {
-        _ = self;
-        return try std.fs.cwd().openDir(".", .{ .iterate = true });
+    pub fn cwd(self:*Term) !std.Io.Dir {
+        return try std.Io.Dir.cwd().openDir(self.io, ".", .{ .iterate = true });
     }
 
     pub fn cwd_path(self:*Term, alloc:std.mem.Allocator) ![]u8 {
-        return (try self.cwd()).realpathAlloc(alloc, ".");
+        const elderly = try (try self.cwd()).realPathFileAlloc(self.io, ".", alloc);
+        const reasonable = try alloc.dupe(u8, std.mem.absorbSentinel(elderly)[0..elderly.len]);
+        alloc.free(elderly);
+        return reasonable;
     }
 
     pub fn deinit(self:*Term) void {
-        _ = self.env.deinit();
         if (self.vars.aliases) |*const_aliases| {
             var aliases = @constCast(const_aliases);
             var itr = aliases.iterator();
@@ -255,7 +265,7 @@ pub const Term = struct {
             const joined = try std.fs.path.join(self.alloc, &.{ dir, name }); 
             defer self.alloc.free(joined);
             var buf:[std.fs.max_path_bytes]u8 = undefined;
-            _ = std.fs.realpath(joined, &buf) catch |e| switch (e) {
+            _ = (try self.cwd()).realPathFile(self.io, joined, &buf) catch |e| switch (e) {
                 error.FileNotFound => continue :loop,
                 else => return false,
             };
@@ -265,7 +275,7 @@ pub const Term = struct {
     }
     
     pub fn pretty_path(self:*Term) ![]u8 {
-        const raw = try (try self.cwd()).realpathAlloc(self.alloc, ".");
+        const raw = try (try self.cwd()).realPathFileAlloc(self.io, ".", self.alloc);
         const home = self.env.get("HOME") orelse return raw;
         if (std.mem.startsWith(u8, raw, home)) {
             defer self.alloc.free(raw);
@@ -415,11 +425,17 @@ pub const Term = struct {
                         },
                         .char => try res.appendSlice(self.alloc, ps1_char_colorized),
                         .time => {
-                            const now = try zeit.instant(.{});
-                            const local = try zeit.local(self.alloc, &self.env);
+                            const now = try zeit.instant(self.io, .{});
+                            const zeit_conf = zeit.EnvConfig{
+                                .tz = self.env.get("TZ"),
+                                .tzdir = self.env.get("TZDIR"),
+                            };
+                            const local = try zeit.local(self.alloc, self.io, zeit_conf);
                             const now_local = now.in(&local);
                             const dt = now_local.time();
-                            try dt.gofmt(res.writer(self.alloc), "03:04pm");
+                            var buf:[7]u8 = undefined;
+                            var wr = std.Io.Writer.fixed(&buf);
+                            try dt.gofmt(&wr, "03:04pm");
                         },
                     }
                     continue;
