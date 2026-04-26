@@ -263,26 +263,35 @@ pub fn parse_and_run(
         }
     }
 
-    for (res.items) |*cmd| if (cmd.is_builtin) {
-        var buf = try std.ArrayList(u8).initCapacity(term.alloc, 0);
-        defer buf.deinit(term.alloc);
-        var reader = &@constCast(&hlp.file_from_fd(cmd.coms[0]).reader(term.io, &.{})).interface;
-        try reader.appendRemainingUnlimited(term.alloc, &buf);
-        posix.close(cmd.coms[0]);
-        if (buf.items.len > 0) {
-            if (buf.items[buf.items.len - 1] == '\n')
-                _ = buf.pop();
-            const stuff = try @import("coms.zig").parse(buf.items);
+    for (res.items) |*cmd| {
+        var buf = try alloc.alloc(u8, 1024);
+        defer alloc.free(buf);
+        var reader = &@constCast(&hlp.file_from_fd(cmd.coms[0]).reader(term.io, buf)).interface;
+        defer posix.close(cmd.coms[0]);
+        while (reader.takeDelimiter('\n') catch |e| b: switch (e) {
+            error.StreamTooLong => {
+                deep: while (true) {
+                    buf = try alloc.realloc(buf, buf.len * 2);
+                    break :b reader.takeDelimiter('\n') catch |er|
+                        if (er == error.StreamTooLong)
+                            continue :deep
+                        else
+                            return e;
+                }
+            },
+            else => return e,
+        }) |l| if (l.len > 0) {
+            const stuff = try @import("coms.zig").parse(l);
             switch (stuff.action) {
                 .EXIT => final.quit = true,
                 .code => final.code = stuff.stuff[0],
+                .msg => std.debug.print("{s}\n", .{stuff.stuff}),
                 else => term.action(stuff) catch |e| {
                     final.code = hlp.determine_exit_code(e);
                 },
             }
-        }
-    } else
-        posix.close(cmd.coms[0]);
+        };
+    }
     
     //wait for each command to finish
     for (res.items) |cmd| if (cmd.opts.wait) {
