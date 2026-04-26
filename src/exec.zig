@@ -186,7 +186,8 @@ pub fn parse_and_run(
             posix.close(cmd.coms[0]);
             defer {
                 posix.close(cmd.coms[1]);
-                posix.abort();
+                while (true)
+                    posix.abort();
             }
 
             //stdin
@@ -228,14 +229,12 @@ pub fn parse_and_run(
             final.code = hlp.determine_exit_code(final.err.?);
 
             for ([_][]const u8{
-                "code:", @constCast(&[_]u8{final.code})
+                "code:", @constCast(&[_]u8{final.code}), "\n",
+                "msg:failed to run command ",
+                        std.mem.span(cmd.split[0] orelse "[null]"),
+                        "(", @errorName(final.err orelse unreachable), ")\n"
             }) |chunk|
-                _ = try posix.write(cmd.coms[1], chunk);
-
-            term.print_error(
-                "failed to run command: {?s} ({t})",
-                .{ cmd.split[0], final.err orelse unreachable }
-            );
+                _ = posix.write(cmd.coms[1], chunk) catch posix.abort();
 
             if (cmd.opts.pipe_details.in) for (res.items[0..i]) |*proc|
                 std.posix.kill(proc.pid, @enumFromInt(9)) catch |e|
