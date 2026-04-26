@@ -332,6 +332,14 @@ pub const Term = struct {
             } else
                 term.env.put("SHLVL", "1") catch unreachable;
         }
+        blk: {
+            var buf:[std.posix.HOST_NAME_MAX]u8 = undefined;
+            const hostname = std.posix.gethostname(&buf) catch |e| {
+                term.print_error("failed to get hostname: {t}", .{e});
+                break :blk;
+            };
+            term.env.put("HOSTNAME", hostname) catch unreachable;
+        }
     }
 
     pub fn get_env_orerr(self:*Term, name:[]const u8) ![]const u8 {
