@@ -150,7 +150,7 @@ pub const Term = struct {
             .stdout = &@constCast(&stdout.writer(stuff.io, &.{})).interface,
             .io = stuff.io,
             .alloc = alloc,
-            .env = stuff.environ_map.*,//if (env) |e| e else try std.process.getEnvMap(alloc),
+            .env = undefined,//if (env) |e| e else try std.process.getEnvMap(alloc),
             .permanent_alloc = alloc,
             .hist = hist,
             .config = .{},
@@ -158,6 +158,7 @@ pub const Term = struct {
             .coms = try posix.new_pipe(),
         };
 
+        res.env = try stuff.environ_map.clone(res.alloc);
         res.init_env();
 
         try res.cd(@constCast("."));
@@ -230,6 +231,7 @@ pub const Term = struct {
     }
 
     pub fn deinit(self:*Term) void {
+        self.env.deinit();
         if (self.vars.aliases) |*const_aliases| {
             var aliases = @constCast(const_aliases);
             var itr = aliases.iterator();
