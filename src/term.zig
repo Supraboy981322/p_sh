@@ -386,6 +386,8 @@ pub const Term = struct {
             },
 
             .EXIT, .code => unreachable,
+
+            .msg => self.print_error("{s}", .{stuff.stuff}),
         }
     }
 

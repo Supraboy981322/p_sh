@@ -7,6 +7,7 @@ pub const Actions = enum {
     alias,
     code, //exit code
     EXIT,
+    msg, //internal
 };
 
 // NOTE: format (examples)
