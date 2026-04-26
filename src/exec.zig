@@ -151,8 +151,7 @@ pub fn parse_and_run(
     }
 
     try parser.split_command(term, &res, line);
-    if (res.items.len > 1)
-        try term.replace_aliases(&res);
+    try term.replace_aliases(&res);
 
     var final:ExecResult = ExecResult{
         .quit = false,

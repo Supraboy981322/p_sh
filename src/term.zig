@@ -298,6 +298,7 @@ pub const Term = struct {
             var argv = try hlp.to_regular_map(split, term.alloc);
             defer term.alloc.free(argv);
             _ = &argv;
+            if (argv.len < 1) continue;
             if (aliases.get(argv[0])) |alias| {
                 term.alloc.free(argv[0]);
                 @constCast(argv)[0] = alias;
