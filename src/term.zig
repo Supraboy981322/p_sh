@@ -425,7 +425,7 @@ pub const Term = struct {
                     const start:usize = i;
                     while (resolved[i] != '}') : (i += 1) {}
                     const Valid = enum {
-                       @"_", char, cwd, time,
+                       @"_", char, cwd, time, hostname, host,
                     };
                     const foo = std.meta.stringToEnum(Valid, resolved[start..i]) orelse .@"_";
                     switch (foo) {
@@ -447,6 +447,10 @@ pub const Term = struct {
                             var wr = std.Io.Writer.fixed(&buf);
                             try dt.gofmt(&wr, "03:04pm");
                             try res.appendSlice(self.alloc, &buf);
+                        },
+                        .hostname, .host => {
+                            const hostname = self.env.get("HOSTNAME") orelse unreachable;
+                            try res.appendSlice(self.alloc, hostname);
                         },
                     }
                     continue;
