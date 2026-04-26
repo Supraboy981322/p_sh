@@ -446,6 +446,7 @@ pub const Term = struct {
                             var buf:[7]u8 = undefined;
                             var wr = std.Io.Writer.fixed(&buf);
                             try dt.gofmt(&wr, "03:04pm");
+                            try res.appendSlice(self.alloc, &buf);
                         },
                     }
                     continue;
