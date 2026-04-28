@@ -186,7 +186,12 @@ pub const Term = struct {
             if (res.env.get("OLDPWD")) |old| {
                 const dir = try res.alloc.dupe(u8, old);
                 defer res.alloc.free(dir);
-                try res.cd(dir);
+                res.cd(dir) catch |e| switch (e) {
+                    error.FileNotFound => {
+                        res.print_error("failed to restore previous directory: {s}\n", .{dir});
+                    },
+                    else => return e,
+                };
             } else res.print_error(
                 "failed to start in OLDPWD: $OLDPWD not set" , .{}
             );
