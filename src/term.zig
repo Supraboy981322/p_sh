@@ -160,6 +160,7 @@ pub const Term = struct {
 
         res.env = try stuff.environ_map.clone(res.alloc);
         res.init_env();
+        errdefer res.env.deinit();
 
         try res.cd(@constCast("."));
 
