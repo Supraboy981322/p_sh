@@ -91,7 +91,7 @@ pub const Term = struct {
         comptime msg:[]const u8,
         stuff:anytype
     ) void {
-        var stderr = @constCast(&self.stderr_file.writer(self.io, &.{})).interface;
+        var stderr = &@constCast(&self.stderr_file.writer(self.io, &.{})).interface;
         const altered = "\n" ++ msg ++ "\n";
         stderr.print(altered, stuff) catch
             std.debug.print(altered, stuff);
