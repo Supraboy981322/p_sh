@@ -114,58 +114,61 @@ pub fn split(alloc:std.mem.Allocator, src:[]u8) ![]Cmd {
     return try res.toOwnedSlice(alloc);
 }
 
-fn can_glob(thing:[]u8) bool {
-    if (thing.len < 1) return false;
-    if (thing[0] == '"' or thing[thing.len - 1] == '\'')
-        return false;
-    return true;
-}
+pub const globbing = struct {
 
-//for each Cmd in []Cmd, creates new []Token with globs expanded,
-//  and replaces Cmd's .args field with new (expanded) []Token
-pub fn glob(alloc:std.mem.Allocator, commands:*[]Cmd) !void {
-    for (commands.*) |*cmd| {
-        var res = try std.ArrayList(Token).initCapacity(alloc, 0);
-        defer _ = res.deinit(alloc);
-        for (cmd.args) |*arg| if (can_glob(arg.value.string.value)) {
-            const pattern = arg.value.string.value;
-            if (glob_lib.validate(pattern)) |_| {
-
-                const matches = match(alloc, pattern) catch |e| switch (e) {
-                    error.NoMatches => {
-                        try res.append(alloc, arg.*);
-                        continue;
-                    },
-                    else => return e,
-                };
-                defer alloc.free(matches);
-
-                @constCast(arg).free(alloc);
-                for (matches) |m|
-                    try res.append(alloc, .{ .value = .{ .string = .{ .value = m } } });
-            } else |err|
-                std.debug.print("{t}\n", .{err});
-        } else
-            try res.append(alloc, arg.*);
-
-        alloc.free(cmd.args);
-        cmd.args = try res.toOwnedSlice(alloc);
+    fn can_glob(thing:[]u8) bool {
+        if (thing.len < 1) return false;
+        if (thing[0] == '"' or thing[thing.len - 1] == '\'')
+            return false;
+        return true;
     }
-}
 
-pub fn match(alloc:std.mem.Allocator, pattern:[]u8) ![][]u8 {
-    var cwd = try std.fs.cwd().openDir(".", .{ .iterate = true });
+    //for each Cmd in []Cmd, creates new []Token with globs expanded,
+    //  and replaces Cmd's .args field with new (expanded) []Token
+    pub fn glob(io:std.Io, alloc:std.mem.Allocator, commands:*[]Cmd) !void {
+        for (commands.*) |*cmd| {
+            var res = try std.ArrayList(Token).initCapacity(alloc, 0);
+            defer _ = res.deinit(alloc);
+            for (cmd.args) |*arg| if (can_glob(arg.value.string.value)) {
+                const pattern = arg.value.string.value;
+                if (glob_lib.validate(pattern)) |_| {
 
-    var res = try std.ArrayList([]u8).initCapacity(alloc, 1);
-    defer res.deinit(alloc);
+                    const matches = match(io, alloc, pattern) catch |e| switch (e) {
+                        error.NoMatches => {
+                            try res.append(alloc, arg.*);
+                            continue;
+                        },
+                        else => return e,
+                    };
+                    defer alloc.free(matches);
 
-    var itr = cwd.iterate();
-    while (try itr.next()) |entry| if (glob_lib.match(pattern, entry.name)) {
-        try res.append(alloc, try alloc.dupe(u8, entry.name));
-    };
+                    @constCast(arg).free(alloc);
+                    for (matches) |m|
+                        try res.append(alloc, .{ .value = .{ .string = .{ .value = m } } });
+                } else |err|
+                    std.debug.print("{t}\n", .{err});
+            } else
+                try res.append(alloc, arg.*);
 
-    if (res.items.len < 1)
-        return error.NoMatches;
+            alloc.free(cmd.args);
+            cmd.args = try res.toOwnedSlice(alloc);
+        }
+    }
 
-    return try res.toOwnedSlice(alloc);
-}
+    pub fn match(io:std.Io, alloc:std.mem.Allocator, pattern:[]u8) ![][]u8 {
+        var cwd = try std.Io.Dir.cwd().openDir(io, ".", .{ .iterate = true });
+
+        var res = try std.ArrayList([]u8).initCapacity(alloc, 1);
+        defer res.deinit(alloc);
+
+        var itr = cwd.iterate();
+        while (try itr.next(io)) |entry| if (glob_lib.match(pattern, entry.name)) {
+            try res.append(alloc, try alloc.dupe(u8, entry.name));
+        };
+
+        if (res.items.len < 1)
+            return error.NoMatches;
+
+        return try res.toOwnedSlice(alloc);
+    }
+};

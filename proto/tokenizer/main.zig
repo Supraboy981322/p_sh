@@ -1,12 +1,10 @@
 const std = @import("std");
 const args = @import("args.zig");
 const types = @import("types.zig");
-const glob = @import("glob");
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+pub fn main(init:std.process.Init) !void {
+    const alloc = init.gpa;
+    const io = init.io;
 
     const code =
         \\echo foo    "foo bar" z* flake*;echo "bar"
@@ -31,7 +29,7 @@ pub fn main() !void {
     }
 
 
-    try args.glob(alloc, &split);
+    try args.globbing.glob(io, alloc, &split);
     std.debug.print("\n==== globbing ====\n", .{});
     for (split) |cmd| {
         std.debug.print("|{s}|\n", .{cmd.name});
